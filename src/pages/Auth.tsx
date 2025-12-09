@@ -162,11 +162,11 @@ export default function Auth() {
     <div className="min-h-screen flex items-center justify-center bg-background p-4">
       <div className="w-full max-w-md animate-slide-up">
         <div className="text-center mb-8">
-          <div className="flex justify-center items-center mb-4">
+          <div className="flex justify-center mb-4">
             <img 
               src="/anademicon.png" 
               alt="Ícone Anadem" 
-              className="h-32 w-32"
+              style={{ height: '120px', width: 'auto' }}
             />
           </div>
           <h1 className="text-2xl font-bold text-foreground">Portal de Agendamentos</h1>
