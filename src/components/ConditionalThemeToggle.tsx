@@ -1,14 +1,10 @@
-import { useEffect } from 'react';
 import { ThemeToggle } from '@/components/ThemeToggle';
 import { useThemeSettings } from '@/hooks/useThemeSettings';
 
 export function ConditionalThemeToggle() {
-  const { themeToggleVisible, loading, refetchSettings } = useThemeSettings();
+  const { themeToggleVisible, loading } = useThemeSettings();
 
-  // Refetch settings on mount to ensure we have the latest value after page refresh
-  useEffect(() => {
-    refetchSettings();
-  }, []);
+  console.log('[ConditionalThemeToggle] loading:', loading, 'visible:', themeToggleVisible);
 
   // Don't show anything while loading to prevent flash
   if (loading) {
