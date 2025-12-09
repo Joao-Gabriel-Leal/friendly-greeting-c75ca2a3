@@ -166,7 +166,7 @@ export default function Auth() {
             <img 
               src="/anademicon.png" 
               alt="Ícone Anadem" 
-              className="h-20 w-20"
+              className="h-32 w-32"
             />
           </div>
           <h1 className="text-2xl font-bold text-foreground">Portal de Agendamentos</h1>
