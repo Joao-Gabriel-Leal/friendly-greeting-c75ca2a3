@@ -25,20 +25,29 @@ import AdminSettings from './AdminSettings';
 
 type AdminTab = 'appointments' | 'users' | 'professionals' | 'blocked' | 'available' | 'reports' | 'settings';
 
-export default function AdminDashboard() {
+interface AdminDashboardProps {
+  showSettings?: boolean;
+  roleLabel?: string;
+}
+
+export default function AdminDashboard({ showSettings = false, roleLabel = 'Admin' }: AdminDashboardProps) {
   const { profile, signOut } = useAuth();
   const [activeTab, setActiveTab] = useState<AdminTab>('appointments');
   const [sidebarOpen, setSidebarOpen] = useState(false);
 
-  const tabs = [
+  const baseTabs = [
     { id: 'appointments' as AdminTab, label: 'Agendamentos', icon: CalendarDays },
     { id: 'users' as AdminTab, label: 'Usuários', icon: Users },
     { id: 'professionals' as AdminTab, label: 'Profissionais', icon: UserCog },
     { id: 'available' as AdminTab, label: 'Disponibilidade', icon: CalendarCheck },
     { id: 'blocked' as AdminTab, label: 'Dias Bloqueados', icon: Ban },
     { id: 'reports' as AdminTab, label: 'Relatórios', icon: BarChart3 },
-    { id: 'settings' as AdminTab, label: 'Configurações', icon: Settings },
   ];
+
+  // Only add settings tab if showSettings is true (developer role)
+  const tabs = showSettings 
+    ? [...baseTabs, { id: 'settings' as AdminTab, label: 'Configurações', icon: Settings }]
+    : baseTabs;
 
   const renderContent = () => {
     switch (activeTab) {
@@ -80,7 +89,7 @@ export default function AdminDashboard() {
                 />
               </div>
               <div>
-                <span className="font-semibold text-sidebar-foreground block">Admin</span>
+                <span className="font-semibold text-sidebar-foreground block">{roleLabel}</span>
                 <span className="text-xs text-sidebar-foreground/80">{profile?.name}</span>
               </div>
             </div>

@@ -26,11 +26,12 @@ interface AuthContextType {
   signOut: () => Promise<void>;
   isAdmin: boolean;
   isProfessional: boolean;
+  isDeveloper: boolean;
   isSuspended: boolean;
   isBlocked: boolean;
   suspendedUntil: Date | null;
   refreshProfile: () => Promise<void>;
-  userRole: 'admin' | 'professional' | 'user' | null;
+  userRole: 'admin' | 'professional' | 'user' | 'developer' | null;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -39,7 +40,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [session, setSession] = useState<Session | null>(null);
   const [profile, setProfile] = useState<Profile | null>(null);
-  const [userRole, setUserRole] = useState<'admin' | 'professional' | 'user' | null>(null);
+  const [userRole, setUserRole] = useState<'admin' | 'professional' | 'user' | 'developer' | null>(null);
   const [loading, setLoading] = useState(true);
 
   const fetchProfile = async (userId: string) => {
@@ -67,7 +68,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         .eq('user_id', userId)
         .maybeSingle();
 
-      setUserRole(roleData?.role as 'admin' | 'professional' | 'user' || 'user');
+      setUserRole(roleData?.role as 'admin' | 'professional' | 'user' | 'developer' || 'user');
     } catch (error) {
       console.error('Error in fetchProfile:', error);
     }
@@ -189,6 +190,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const isBlocked = profile?.blocked || false;
   const isAdmin = userRole === 'admin';
   const isProfessional = userRole === 'professional';
+  const isDeveloper = userRole === 'developer';
 
   return (
     <AuthContext.Provider value={{
@@ -201,6 +203,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       signOut,
       isAdmin,
       isProfessional,
+      isDeveloper,
       isSuspended,
       isBlocked,
       suspendedUntil,

@@ -7,7 +7,7 @@ import AdminDashboard from '@/components/admin/AdminDashboard';
 import ProfessionalDashboard from '@/components/professional/ProfessionalDashboard';
 
 export default function Dashboard() {
-  const { user, profile, loading, isAdmin, isProfessional, isSuspended, suspendedUntil, refreshProfile } = useAuth();
+  const { user, profile, loading, isAdmin, isProfessional, isDeveloper, isSuspended, suspendedUntil, refreshProfile } = useAuth();
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -31,8 +31,14 @@ export default function Dashboard() {
     );
   }
 
+  // Developer has same dashboard as admin but with full settings access
+  if (isDeveloper) {
+    return <AdminDashboard showSettings={true} roleLabel="Desenvolvedor" />;
+  }
+
+  // Admin now has no settings tab
   if (isAdmin) {
-    return <AdminDashboard />;
+    return <AdminDashboard showSettings={false} roleLabel="Admin" />;
   }
 
   if (isProfessional) {

@@ -9,7 +9,7 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useToast } from '@/hooks/use-toast';
-import { Calendar, UserPlus, LogIn, Loader2, Database } from 'lucide-react';
+import { Calendar, UserPlus, LogIn, Loader2, Database, Code } from 'lucide-react';
 import { z } from 'zod';
 
 const SETORES = [
@@ -38,6 +38,7 @@ const registerSchema = z.object({
 export default function Auth() {
   const [isLoading, setIsLoading] = useState(false);
   const [setupLoading, setSetupLoading] = useState(false);
+  const [devSetupLoading, setDevSetupLoading] = useState(false);
   const [showSetupButton, setShowSetupButton] = useState(false);
   const [loginData, setLoginData] = useState({ email: '', password: '' });
   const [registerData, setRegisterData] = useState({ name: '', email: '', password: '', setor: '' });
@@ -87,6 +88,30 @@ export default function Auth() {
       });
     } finally {
       setSetupLoading(false);
+    }
+  };
+
+  const handleCreateDeveloper = async () => {
+    setDevSetupLoading(true);
+    try {
+      const response = await supabase.functions.invoke('create-developer-account');
+      
+      if (response.error) {
+        throw response.error;
+      }
+
+      toast({
+        title: 'Conta de desenvolvedor criada!',
+        description: 'Email: desenvolvimento@anadem.com.br | Senha: 123456',
+      });
+    } catch (error: any) {
+      toast({
+        variant: 'destructive',
+        title: 'Erro ao criar desenvolvedor',
+        description: error.message || 'Falha ao criar conta de desenvolvedor',
+      });
+    } finally {
+      setDevSetupLoading(false);
     }
   };
 
@@ -282,7 +307,7 @@ export default function Auth() {
         </Card>
 
         {showSetupButton && (
-          <div className="mt-4">
+          <div className="mt-4 space-y-2">
             <Button 
               variant="outline" 
               className="w-full gap-2"
@@ -295,6 +320,19 @@ export default function Auth() {
                 <Database className="h-4 w-4" />
               )}
               Configurar Dados Iniciais
+            </Button>
+            <Button 
+              variant="outline" 
+              className="w-full gap-2"
+              onClick={handleCreateDeveloper}
+              disabled={devSetupLoading}
+            >
+              {devSetupLoading ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                <Code className="h-4 w-4" />
+              )}
+              Criar Conta de Desenvolvedor
             </Button>
           </div>
         )}
