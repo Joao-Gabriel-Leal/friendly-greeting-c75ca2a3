@@ -4,12 +4,14 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Switch } from '@/components/ui/switch';
 import { Label } from '@/components/ui/label';
 import { useToast } from '@/hooks/use-toast';
+import { useThemeSettings } from '@/hooks/useThemeSettings';
 import { Loader2 } from 'lucide-react';
 
 export default function AdminSettings() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [showSetupButton, setShowSetupButton] = useState(true);
+  const { themeToggleVisible, setThemeToggleVisible, loading: themeLoading } = useThemeSettings();
   const { toast } = useToast();
 
   useEffect(() => {
@@ -63,7 +65,27 @@ export default function AdminSettings() {
     setSaving(false);
   };
 
-  if (loading) {
+  const handleToggleTheme = async (visible: boolean) => {
+    setSaving(true);
+    try {
+      await setThemeToggleVisible(visible);
+      toast({
+        title: 'Configuração salva',
+        description: visible 
+          ? 'Seletor de tema escuro está visível para todos os usuários.' 
+          : 'Seletor de tema escuro está oculto para todos os usuários.',
+      });
+    } catch (error) {
+      toast({
+        variant: 'destructive',
+        title: 'Erro ao salvar',
+        description: 'Não foi possível atualizar a configuração.',
+      });
+    }
+    setSaving(false);
+  };
+
+  if (loading || themeLoading) {
     return (
       <div className="flex items-center justify-center py-12">
         <Loader2 className="h-8 w-8 animate-spin text-primary" />
@@ -96,6 +118,25 @@ export default function AdminSettings() {
               onCheckedChange={handleToggleSetupButton}
               disabled={saving}
             />
+          </div>
+
+          <div className="border-t border-border pt-6">
+            <div className="flex items-center justify-between">
+              <div className="space-y-0.5">
+                <Label htmlFor="theme-toggle" className="text-base">
+                  Mostrar seletor de tema escuro
+                </Label>
+                <p className="text-sm text-muted-foreground">
+                  Permite que usuários alternem entre tema claro e escuro. Quando desativado, o seletor fica oculto para todos.
+                </p>
+              </div>
+              <Switch
+                id="theme-toggle"
+                checked={themeToggleVisible}
+                onCheckedChange={handleToggleTheme}
+                disabled={saving}
+              />
+            </div>
           </div>
         </CardContent>
       </Card>
