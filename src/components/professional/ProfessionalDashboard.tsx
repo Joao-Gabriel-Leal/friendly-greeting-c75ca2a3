@@ -9,6 +9,8 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogD
 import { Textarea } from '@/components/ui/textarea';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Calendar } from '@/components/ui/calendar';
+import { ThemeToggle } from '@/components/ThemeToggle';
+import { NotificationBell } from '@/components/NotificationBell';
 import { Loader2, LogOut, CalendarDays, List, XCircle, Clock, CheckCircle } from 'lucide-react';
 import { format, parseISO, isSameDay } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
@@ -232,10 +234,14 @@ export default function ProfessionalDashboard() {
       </div>
 
       {/* Botão de sair */}
-      <Button variant="outline" onClick={handleSignOut}>
-        <LogOut className="h-4 w-4 mr-2" />
-        Sair
-      </Button>
+      <div className="flex items-center gap-2">
+        <ThemeToggle />
+        <NotificationBell />
+        <Button variant="outline" onClick={handleSignOut}>
+          <LogOut className="h-4 w-4 mr-2" />
+          Sair
+        </Button>
+      </div>
     </div>
   </header>
 
