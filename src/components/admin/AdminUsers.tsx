@@ -9,7 +9,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogD
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, DropdownMenuSeparator, DropdownMenuSub, DropdownMenuSubTrigger, DropdownMenuSubContent } from '@/components/ui/dropdown-menu';
 import { Checkbox } from '@/components/ui/checkbox';
-import { Loader2, Edit, Ban, CheckCircle, Search, KeyRound, MoreVertical, ShieldOff, Clock, Lock, Building2, XCircle } from 'lucide-react';
+import { Loader2, Edit, Ban, CheckCircle, Search, KeyRound, MoreVertical, ShieldOff, Clock, Lock, Building2, XCircle, UserPlus } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { format, parseISO, addMonths } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
@@ -56,11 +56,14 @@ export default function AdminUsers() {
   const [showPasswordDialog, setShowPasswordDialog] = useState(false);
   const [showSuspendDialog, setShowSuspendDialog] = useState(false);
   const [showBlockDialog, setShowBlockDialog] = useState(false);
+  const [showCreateDialog, setShowCreateDialog] = useState(false);
   const [formData, setFormData] = useState({ name: '', email: '', role: 'user' as 'user' | 'admin' | 'developer', setor: '' });
+  const [createFormData, setCreateFormData] = useState({ name: '', email: '', password: '123456', phone: '', cpf: '', setor: '' });
   const [newPassword, setNewPassword] = useState('');
   const [selectedSpecialties, setSelectedSpecialties] = useState<string[]>([]);
   const [blockReason, setBlockReason] = useState('');
   const [saving, setSaving] = useState(false);
+  const [creating, setCreating] = useState(false);
 
   useEffect(() => {
     fetchUsers();
@@ -404,6 +407,62 @@ export default function AdminUsers() {
     );
   }
 
+  const handleOpenCreateDialog = () => {
+    setCreateFormData({ name: '', email: '', password: '123456', phone: '', cpf: '', setor: '' });
+    setShowCreateDialog(true);
+  };
+
+  const handleCreateUser = async () => {
+    if (!createFormData.name || !createFormData.email) {
+      toast({ variant: 'destructive', title: 'Erro', description: 'Nome e email são obrigatórios.' });
+      return;
+    }
+
+    // Validate email format
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(createFormData.email)) {
+      toast({ variant: 'destructive', title: 'Erro', description: 'Email inválido.' });
+      return;
+    }
+
+    if (createFormData.password.length < 6) {
+      toast({ variant: 'destructive', title: 'Erro', description: 'A senha deve ter no mínimo 6 caracteres.' });
+      return;
+    }
+
+    setCreating(true);
+    try {
+      const { data: sessionData } = await supabase.auth.getSession();
+      
+      const response = await supabase.functions.invoke('import-user', {
+        body: {
+          name: createFormData.name,
+          email: createFormData.email,
+          password: createFormData.password,
+          phone: createFormData.phone || null,
+          cpf: createFormData.cpf || null,
+          setor: createFormData.setor || null,
+        },
+      });
+
+      if (response.error) {
+        throw new Error(response.error.message || 'Erro ao criar usuário');
+      }
+
+      if (response.data?.error) {
+        throw new Error(response.data.error);
+      }
+
+      toast({ title: 'Sucesso', description: 'Usuário criado com sucesso!' });
+      setShowCreateDialog(false);
+      fetchUsers();
+    } catch (error: any) {
+      toast({ variant: 'destructive', title: 'Erro', description: error.message || 'Erro ao criar usuário.' });
+    } finally {
+      setCreating(false);
+    }
+  };
+
   return (
     <div className="space-y-6 animate-fade-in">
       <div className="flex flex-col sm:flex-row gap-4 items-start sm:items-center justify-between">
@@ -416,6 +475,10 @@ export default function AdminUsers() {
             className="pl-10"
           />
         </div>
+        <Button onClick={handleOpenCreateDialog} className="bg-primary hover:bg-primary/90">
+          <UserPlus className="h-4 w-4 mr-2" />
+          Novo Usuário
+        </Button>
       </div>
 
       <Card>
@@ -696,6 +759,87 @@ export default function AdminUsers() {
             <Button onClick={handleBlockAccount} variant="destructive">
               <Ban className="h-4 w-4 mr-2" />
               Bloquear Conta
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Dialog Criar Usuário */}
+      <Dialog open={showCreateDialog} onOpenChange={setShowCreateDialog}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Novo Usuário</DialogTitle>
+            <DialogDescription>
+              Preencha os dados para cadastrar um novo colaborador.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-4">
+            <div className="space-y-2">
+              <Label>Nome *</Label>
+              <Input
+                placeholder="Nome completo"
+                value={createFormData.name}
+                onChange={(e) => setCreateFormData({ ...createFormData, name: e.target.value })}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label>Email *</Label>
+              <Input
+                type="email"
+                placeholder="nome@empresa.com.br"
+                value={createFormData.email}
+                onChange={(e) => setCreateFormData({ ...createFormData, email: e.target.value })}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label>Senha</Label>
+              <Input
+                type="text"
+                placeholder="Senha inicial"
+                value={createFormData.password}
+                onChange={(e) => setCreateFormData({ ...createFormData, password: e.target.value })}
+              />
+              <p className="text-xs text-muted-foreground">
+                Senha padrão: 123456. O usuário será solicitado a trocar no primeiro acesso.
+              </p>
+            </div>
+            <div className="space-y-2">
+              <Label>Telefone</Label>
+              <Input
+                placeholder="(00) 00000-0000"
+                value={createFormData.phone}
+                onChange={(e) => setCreateFormData({ ...createFormData, phone: e.target.value })}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label>CPF</Label>
+              <Input
+                placeholder="000.000.000-00"
+                value={createFormData.cpf}
+                onChange={(e) => setCreateFormData({ ...createFormData, cpf: e.target.value })}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label>Departamento</Label>
+              <Select 
+                value={createFormData.setor} 
+                onValueChange={(v) => setCreateFormData({ ...createFormData, setor: v })}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Selecione o departamento" />
+                </SelectTrigger>
+                <SelectContent>
+                  {DEPARTMENTS.map(dept => (
+                    <SelectItem key={dept} value={dept}>{dept}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowCreateDialog(false)}>Cancelar</Button>
+            <Button onClick={handleCreateUser} className="bg-primary hover:bg-primary/90" disabled={creating}>
+              {creating ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Cadastrar'}
             </Button>
           </DialogFooter>
         </DialogContent>
