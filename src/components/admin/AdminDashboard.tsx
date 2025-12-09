@@ -73,8 +73,8 @@ export default function AdminDashboard() {
             <div className="flex items-center gap-3">
               <div className="w-10 h-10 rounded-xl bg-secondary flex items-center justify-center">
                 <img 
-                  src="/anademicon.png" 
-                  alt="Ícone Anadem" 
+                  src="/favicon.ico" 
+                  alt="Ícone" 
                   className="h-6 w-6"
                 />
               </div>
