@@ -220,8 +220,8 @@ export default function ProfessionalDashboard() {
       <div className="flex items-center gap-3">
         <div className="w-10 h-10 rounded-xl bg-secondary flex items-center justify-center">
           <img 
-            src="/favicon.ico" 
-            alt="Ícone Anadem" 
+            src="/anadem-icon.png" 
+            alt="Anadem" 
             className="h-8 w-8"
           />
         </div>
