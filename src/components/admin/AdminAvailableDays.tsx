@@ -179,6 +179,21 @@ export default function AdminAvailableDays() {
     setSaving(false);
   };
 
+  // Helper function to check if two time ranges overlap
+  const hasTimeOverlap = (start1: string, end1: string, start2: string, end2: string): boolean => {
+    const toMinutes = (time: string) => {
+      const [h, m] = time.split(':').map(Number);
+      return h * 60 + m;
+    };
+    const s1 = toMinutes(start1);
+    const e1 = toMinutes(end1);
+    const s2 = toMinutes(start2);
+    const e2 = toMinutes(end2);
+    
+    // Two ranges overlap if one starts before the other ends and vice versa
+    return s1 < e2 && s2 < e1;
+  };
+
   const handleAddSpecificDate = async () => {
     if (!selectedCalendarDate) {
       toast({ variant: 'destructive', title: 'Erro', description: 'Selecione uma data.' });
@@ -187,13 +202,18 @@ export default function AdminAvailableDays() {
 
     const dateStr = format(selectedCalendarDate, 'yyyy-MM-dd');
     
-    // Check if same date AND same time slot already exists
-    if (specificDates.some(d => 
+    // Check for time overlap with existing entries on the same date
+    const overlappingEntry = specificDates.find(d => 
       d.date === dateStr && 
-      d.start_time === specificStartTime && 
-      d.end_time === specificEndTime
-    )) {
-      toast({ variant: 'destructive', title: 'Erro', description: 'Este horário já foi adicionado para esta data.' });
+      hasTimeOverlap(specificStartTime, specificEndTime, d.start_time, d.end_time)
+    );
+
+    if (overlappingEntry) {
+      toast({ 
+        variant: 'destructive', 
+        title: 'Conflito de horário', 
+        description: `Este horário conflita com ${overlappingEntry.start_time} - ${overlappingEntry.end_time}.` 
+      });
       return;
     }
 
