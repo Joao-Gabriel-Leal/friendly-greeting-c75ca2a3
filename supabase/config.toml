@@ -5,3 +5,6 @@ verify_jwt = false
 
 [functions.get-booked-slots]
 verify_jwt = false
+
+[functions.create-developer-account]
+verify_jwt = false
