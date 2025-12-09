@@ -16,14 +16,17 @@ import { ptBR } from 'date-fns/locale';
 import { emailService } from '@/lib/emailService';
 
 const DEPARTMENTS = [
-  'Administração',
-  'Financeiro', 
-  'Recursos Humanos',
-  'Produção',
+  'Expedição',
   'Comercial',
-  'Marketing',
-  'Logística',
-  'Tecnologia da Informação'
+  'Jurídico',
+  'Compras',
+  'RH',
+  'Controladoria',
+  'Cirurgia Segura',
+  'Administrativo',
+  'TI',
+  'Financeiro',
+  'Presidência'
 ];
 
 interface User {
@@ -58,7 +61,7 @@ export default function AdminUsers() {
   const [showBlockDialog, setShowBlockDialog] = useState(false);
   const [showCreateDialog, setShowCreateDialog] = useState(false);
   const [formData, setFormData] = useState({ name: '', email: '', role: 'user' as 'user' | 'admin' | 'developer', setor: '' });
-  const [createFormData, setCreateFormData] = useState({ name: '', email: '', password: '123456', phone: '', cpf: '', setor: '' });
+  const [createFormData, setCreateFormData] = useState({ name: '', email: '', password: '123456', phone: '', setor: '' });
   const [newPassword, setNewPassword] = useState('');
   const [selectedSpecialties, setSelectedSpecialties] = useState<string[]>([]);
   const [blockReason, setBlockReason] = useState('');
@@ -408,7 +411,7 @@ export default function AdminUsers() {
   }
 
   const handleOpenCreateDialog = () => {
-    setCreateFormData({ name: '', email: '', password: '123456', phone: '', cpf: '', setor: '' });
+    setCreateFormData({ name: '', email: '', password: '123456', phone: '', setor: '' });
     setShowCreateDialog(true);
   };
 
@@ -440,7 +443,6 @@ export default function AdminUsers() {
           email: createFormData.email,
           password: createFormData.password,
           phone: createFormData.phone || null,
-          cpf: createFormData.cpf || null,
           setor: createFormData.setor || null,
         },
       });
@@ -809,14 +811,6 @@ export default function AdminUsers() {
                 placeholder="(00) 00000-0000"
                 value={createFormData.phone}
                 onChange={(e) => setCreateFormData({ ...createFormData, phone: e.target.value })}
-              />
-            </div>
-            <div className="space-y-2">
-              <Label>CPF</Label>
-              <Input
-                placeholder="000.000.000-00"
-                value={createFormData.cpf}
-                onChange={(e) => setCreateFormData({ ...createFormData, cpf: e.target.value })}
               />
             </div>
             <div className="space-y-2">

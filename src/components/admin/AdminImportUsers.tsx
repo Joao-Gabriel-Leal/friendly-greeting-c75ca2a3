@@ -15,7 +15,6 @@ interface ImportRow {
   name: string;
   email: string;
   phone?: string;
-  cpf?: string;
   setor?: string;
   password?: string;
   status: 'pending' | 'success' | 'error';
@@ -23,14 +22,17 @@ interface ImportRow {
 }
 
 const VALID_SETORES = [
-  'Administração',
-  'Financeiro',
-  'Recursos Humanos',
-  'Produção',
+  'Expedição',
   'Comercial',
-  'Marketing',
-  'Logística',
-  'Tecnologia da Informação'
+  'Jurídico',
+  'Compras',
+  'RH',
+  'Controladoria',
+  'Cirurgia Segura',
+  'Administrativo',
+  'TI',
+  'Financeiro',
+  'Presidência'
 ];
 
 export default function AdminImportUsers() {
@@ -48,17 +50,15 @@ export default function AdminImportUsers() {
         'Nome*': 'João da Silva',
         'Email*': 'joao.silva@empresa.com.br',
         'Telefone': '(11) 99999-9999',
-        'CPF': '123.456.789-00',
-        'Departamento': 'Administração',
-        'Senha*': 'senha123'
+        'Departamento': 'Administrativo',
+        'Senha*': '123456'
       },
       {
         'Nome*': 'Maria Santos',
         'Email*': 'maria.santos@empresa.com.br',
         'Telefone': '(11) 88888-8888',
-        'CPF': '987.654.321-00',
-        'Departamento': 'Recursos Humanos',
-        'Senha*': 'senha456'
+        'Departamento': 'RH',
+        'Senha*': '123456'
       }
     ];
 
@@ -69,7 +69,6 @@ export default function AdminImportUsers() {
       { wch: 25 }, // Nome
       { wch: 30 }, // Email
       { wch: 18 }, // Telefone
-      { wch: 16 }, // CPF
       { wch: 25 }, // Departamento
       { wch: 15 }  // Senha
     ];
@@ -82,17 +81,20 @@ export default function AdminImportUsers() {
       { 'Instruções': 'Campos marcados com * são obrigatórios' },
       { 'Instruções': '' },
       { 'Instruções': 'Departamentos válidos:' },
-      { 'Instruções': '- Administração' },
-      { 'Instruções': '- Financeiro' },
-      { 'Instruções': '- Recursos Humanos' },
-      { 'Instruções': '- Produção' },
+      { 'Instruções': '- Expedição' },
       { 'Instruções': '- Comercial' },
-      { 'Instruções': '- Marketing' },
-      { 'Instruções': '- Logística' },
-      { 'Instruções': '- Tecnologia da Informação' },
+      { 'Instruções': '- Jurídico' },
+      { 'Instruções': '- Compras' },
+      { 'Instruções': '- RH' },
+      { 'Instruções': '- Controladoria' },
+      { 'Instruções': '- Cirurgia Segura' },
+      { 'Instruções': '- Administrativo' },
+      { 'Instruções': '- TI' },
+      { 'Instruções': '- Financeiro' },
+      { 'Instruções': '- Presidência' },
       { 'Instruções': '' },
       { 'Instruções': 'Formato de email: nome@empresa.com.br' },
-      { 'Instruções': 'Senha: mínimo 6 caracteres' },
+      { 'Instruções': 'Senha padrão sugerida: 123456 (usuário trocará no primeiro acesso)' },
     ];
     const wsInstructions = XLSX.utils.json_to_sheet(instructionsData);
     wsInstructions['!cols'] = [{ wch: 50 }];
@@ -151,7 +153,6 @@ export default function AdminImportUsers() {
         const name = row['Nome*']?.toString().trim() || '';
         const email = row['Email*']?.toString().trim().toLowerCase() || '';
         const phone = row['Telefone']?.toString().trim() || '';
-        const cpf = row['CPF']?.toString().trim() || '';
         const setor = row['Departamento']?.toString().trim() || '';
         const password = row['Senha*']?.toString().trim() || '';
 
@@ -193,7 +194,6 @@ export default function AdminImportUsers() {
           name,
           email,
           phone,
-          cpf,
           setor,
           password,
           status: errors.length > 0 ? 'error' : 'pending',
@@ -263,7 +263,6 @@ export default function AdminImportUsers() {
             email: row.email,
             password: row.password,
             phone: row.phone || null,
-            cpf: row.cpf || null,
             setor: row.setor || null
           }
         });
@@ -425,7 +424,6 @@ export default function AdminImportUsers() {
                     <TableHead>Nome</TableHead>
                     <TableHead>Email</TableHead>
                     <TableHead>Telefone</TableHead>
-                    <TableHead>CPF</TableHead>
                     <TableHead>Departamento</TableHead>
                     <TableHead className="w-24">Status</TableHead>
                   </TableRow>
@@ -437,7 +435,6 @@ export default function AdminImportUsers() {
                       <TableCell>{row.name || '-'}</TableCell>
                       <TableCell>{row.email || '-'}</TableCell>
                       <TableCell>{row.phone || '-'}</TableCell>
-                      <TableCell>{row.cpf || '-'}</TableCell>
                       <TableCell>{row.setor || '-'}</TableCell>
                       <TableCell>
                         {row.status === 'pending' && (

@@ -11,7 +11,6 @@ interface ImportUserRequest {
   email: string;
   password: string;
   phone?: string;
-  cpf?: string;
   setor?: string;
 }
 
@@ -68,7 +67,7 @@ serve(async (req) => {
 
     // Parse request body
     const body: ImportUserRequest = await req.json();
-    const { name, email, password, phone, cpf, setor } = body;
+    const { name, email, password, phone, setor } = body;
 
     // Validate required fields
     if (!name || !email || !password) {
@@ -115,13 +114,12 @@ serve(async (req) => {
       );
     }
 
-    // Update profile with additional fields (phone, cpf) and ensure must_change_password is true
+    // Update profile with additional fields and ensure must_change_password is true
     // The handle_new_user trigger creates the profile, we just need to update it
     const { error: updateError } = await supabaseAdmin
       .from("profiles")
       .update({
         phone: phone || null,
-        cpf: cpf || null,
         must_change_password: true, // Force password change on first login
       })
       .eq("user_id", newUser.user.id);
