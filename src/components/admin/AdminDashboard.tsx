@@ -34,10 +34,20 @@ interface AdminDashboardProps {
 
 export default function AdminDashboard({ showSettings = false, roleLabel = 'Admin' }: AdminDashboardProps) {
   const { profile, signOut } = useAuth();
-  const [activeTab, setActiveTab] = useState<AdminTab>('mybooking');
+  const [activeTab, setActiveTab] = useState<AdminTab>(roleLabel === 'Desenvolvedor' ? 'appointments' : 'mybooking');
   const [sidebarOpen, setSidebarOpen] = useState(false);
 
-  const baseTabs = [
+  // Developer doesn't need booking (uses separate personal account)
+  const isDeveloper = roleLabel === 'Desenvolvedor';
+  
+  const baseTabs = isDeveloper ? [
+    { id: 'appointments' as AdminTab, label: 'Agendamentos', icon: CalendarDays },
+    { id: 'users' as AdminTab, label: 'Usuários', icon: Users },
+    { id: 'professionals' as AdminTab, label: 'Profissionais', icon: UserCog },
+    { id: 'available' as AdminTab, label: 'Disponibilidade', icon: CalendarCheck },
+    { id: 'blocked' as AdminTab, label: 'Dias Bloqueados', icon: Ban },
+    { id: 'reports' as AdminTab, label: 'Relatórios', icon: BarChart3 },
+  ] : [
     { id: 'mybooking' as AdminTab, label: 'Meu Agendamento', icon: CalendarPlus },
     { id: 'appointments' as AdminTab, label: 'Agendamentos', icon: CalendarDays },
     { id: 'users' as AdminTab, label: 'Usuários', icon: Users },
