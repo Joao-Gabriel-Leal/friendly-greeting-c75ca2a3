@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useAuth } from '@/lib/auth';
 import { Button } from '@/components/ui/button';
-import { ThemeToggle } from '@/components/ThemeToggle';
+import { ConditionalThemeToggle } from '@/components/ConditionalThemeToggle';
 import { 
   Calendar, 
   LogOut, 
@@ -155,7 +155,7 @@ export default function AdminDashboard({ showSettings = false, roleLabel = 'Admi
               </h1>
             </div>
             <div className="flex items-center gap-2">
-              <ThemeToggle />
+              <ConditionalThemeToggle />
             </div>
           </div>
         </header>
