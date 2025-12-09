@@ -18,7 +18,18 @@ interface TimeSelectorProps {
   onBack: () => void;
 }
 
-const timeSlots = ['09:00', '10:00', '11:00', '12:00', '13:00', '14:00', '15:00', '16:00'];
+// Generate time slots between start and end time
+function generateTimeSlots(startTime: string, endTime: string): string[] {
+  const slots: string[] = [];
+  const [startHour] = startTime.split(':').map(Number);
+  const [endHour] = endTime.split(':').map(Number);
+  
+  for (let hour = startHour; hour < endHour; hour++) {
+    slots.push(`${hour.toString().padStart(2, '0')}:00`);
+  }
+  
+  return slots;
+}
 
 export default function TimeSelector({ professionalId, professionalName, specialtyId, specialty, date, onComplete, onBack }: TimeSelectorProps) {
   const { user, profile } = useAuth();
@@ -26,19 +37,69 @@ export default function TimeSelector({ professionalId, professionalName, special
   const [loading, setLoading] = useState(true);
   const [booking, setBooking] = useState(false);
   const [bookedSlots, setBookedSlots] = useState<string[]>([]);
+  const [availableTimeSlots, setAvailableTimeSlots] = useState<string[]>([]);
   const [selectedTime, setSelectedTime] = useState<string | null>(null);
 
   useEffect(() => {
-    fetchBookedSlots();
+    fetchAvailability();
   }, [date, professionalId]);
 
-  const fetchBookedSlots = async () => {
+  const fetchAvailability = async () => {
     try {
-      // Use edge function to bypass RLS and get all booked slots for this professional
+      setLoading(true);
+      const dateStr = format(date, 'yyyy-MM-dd');
+      const dayOfWeek = date.getDay();
+
+      // First, check for specific date availability (AVAILABLE: entries in blocked_days)
+      const { data: specificAvailability } = await supabase
+        .from('blocked_days')
+        .select('reason')
+        .eq('professional_id', professionalId)
+        .eq('blocked_date', dateStr)
+        .like('reason', 'AVAILABLE:%');
+
+      let timeSlots: string[] = [];
+
+      if (specificAvailability && specificAvailability.length > 0) {
+        // Use specific availability for this date
+        specificAvailability.forEach(entry => {
+          if (entry.reason) {
+            // Parse "AVAILABLE: HH:MM - HH:MM" format
+            const match = entry.reason.match(/AVAILABLE:\s*(\d{2}:\d{2})\s*-\s*(\d{2}:\d{2})/);
+            if (match) {
+              const [, startTime, endTime] = match;
+              const slots = generateTimeSlots(startTime, endTime);
+              timeSlots = [...timeSlots, ...slots];
+            }
+          }
+        });
+      } else {
+        // Fall back to weekly availability
+        const { data: weeklyAvailability } = await supabase
+          .from('available_days')
+          .select('start_time, end_time')
+          .eq('professional_id', professionalId)
+          .eq('day_of_week', dayOfWeek);
+
+        if (weeklyAvailability && weeklyAvailability.length > 0) {
+          weeklyAvailability.forEach(entry => {
+            const startTime = entry.start_time.substring(0, 5);
+            const endTime = entry.end_time.substring(0, 5);
+            const slots = generateTimeSlots(startTime, endTime);
+            timeSlots = [...timeSlots, ...slots];
+          });
+        }
+      }
+
+      // Remove duplicates and sort
+      timeSlots = [...new Set(timeSlots)].sort();
+      setAvailableTimeSlots(timeSlots);
+
+      // Fetch booked slots
       const { data, error } = await supabase.functions.invoke('get-booked-slots', {
         body: {
           professionalId,
-          date: format(date, 'yyyy-MM-dd'),
+          date: dateStr,
         },
       });
 
@@ -48,7 +109,8 @@ export default function TimeSelector({ professionalId, professionalName, special
         setBookedSlots(data.bookedSlots);
       }
     } catch (error) {
-      console.error('Error fetching booked slots:', error);
+      console.error('Error fetching availability:', error);
+      setAvailableTimeSlots([]);
       setBookedSlots([]);
     }
     setLoading(false);
@@ -82,7 +144,7 @@ export default function TimeSelector({ professionalId, professionalName, special
           title: 'Horário indisponível',
           description: 'Este horário acabou de ser reservado. Por favor, escolha outro.',
         });
-        fetchBookedSlots();
+        fetchAvailability();
       } else {
         toast({
           variant: 'destructive',
@@ -112,7 +174,7 @@ export default function TimeSelector({ professionalId, professionalName, special
     return slotTime <= now;
   };
 
-  const availableSlots = timeSlots.filter(slot => !bookedSlots.includes(slot) && !isSlotPast(slot));
+  const displaySlots = availableTimeSlots.filter(slot => !isSlotPast(slot));
 
   return (
     <div className="max-w-md mx-auto animate-fade-in">
@@ -129,7 +191,7 @@ export default function TimeSelector({ professionalId, professionalName, special
           </CardDescription>
         </CardHeader>
         <CardContent>
-          {availableSlots.length === 0 ? (
+          {displaySlots.length === 0 ? (
             <div className="text-center py-8">
               <Clock className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
               <p className="text-muted-foreground">
@@ -142,10 +204,9 @@ export default function TimeSelector({ professionalId, professionalName, special
           ) : (
             <>
               <div className="grid grid-cols-2 gap-3">
-                {timeSlots.map(slot => {
+                {displaySlots.map(slot => {
                   const isBooked = bookedSlots.includes(slot);
-                  const isPast = isSlotPast(slot);
-                  const isUnavailable = isBooked || isPast;
+                  const isUnavailable = isBooked;
                   const isSelected = selectedTime === slot;
 
                   return (
@@ -162,11 +223,6 @@ export default function TimeSelector({ professionalId, professionalName, special
                         <>
                           <span className="text-lg">{slot}</span>
                           <span className="text-xs font-normal">Reservado</span>
-                        </>
-                      ) : isPast ? (
-                        <>
-                          <span className="text-lg">{slot}</span>
-                          <span className="text-xs font-normal">Passado</span>
                         </>
                       ) : (
                         <>
