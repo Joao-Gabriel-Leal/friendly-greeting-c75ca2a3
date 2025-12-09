@@ -212,31 +212,105 @@ export default function AdminReports() {
 
     const worksheetRelatorio = XLSX.utils.json_to_sheet(data);
     
-    // Aba 2: Dashboard de métricas
-    const dashboardData = [
-      { 'Métrica': 'Total de Agendamentos', 'Valor': stats.totalAppointments, 'Percentual': '100%' },
-      { 'Métrica': 'Agendados', 'Valor': stats.scheduledAppointments, 'Percentual': stats.totalAppointments > 0 ? `${((stats.scheduledAppointments / stats.totalAppointments) * 100).toFixed(1)}%` : '0%' },
-      { 'Métrica': 'Concluídos', 'Valor': stats.completedAppointments, 'Percentual': `${completionRate}%` },
-      { 'Métrica': 'Cancelados', 'Valor': stats.cancelledAppointments, 'Percentual': `${cancelledRate}%` },
-      { 'Métrica': 'Faltas', 'Valor': stats.noShowAppointments, 'Percentual': `${noShowRate}%` },
-      { 'Métrica': 'Usuários Suspensos', 'Valor': stats.suspendedUsers, 'Percentual': '-' },
-      { 'Métrica': '', 'Valor': '', 'Percentual': '' },
-      { 'Métrica': '--- Por Especialidade ---', 'Valor': '', 'Percentual': '' },
-      ...stats.specialtyData.map(s => ({
-        'Métrica': s.name,
-        'Valor': s.value,
-        'Percentual': stats.totalAppointments > 0 ? `${((s.value / stats.totalAppointments) * 100).toFixed(1)}%` : '0%'
-      })),
-      { 'Métrica': '', 'Valor': '', 'Percentual': '' },
-      { 'Métrica': '--- Por Mês ---', 'Valor': '', 'Percentual': '' },
-      ...stats.monthlyData.map(m => ({
-        'Métrica': m.month,
-        'Valor': m.count,
-        'Percentual': '-'
-      })),
+    // Aba 2: Dashboard visual com gráficos ASCII
+    const dashboardRows: string[][] = [];
+    
+    // Título
+    dashboardRows.push(['📊 DASHBOARD DE AGENDAMENTOS', '', '', '', '']);
+    dashboardRows.push([`Gerado em: ${format(new Date(), 'dd/MM/yyyy HH:mm')}`, '', '', '', '']);
+    dashboardRows.push(['', '', '', '', '']);
+    
+    // Métricas principais
+    dashboardRows.push(['═══════════════════════════════════════════════════════════════════════════════', '', '', '', '']);
+    dashboardRows.push(['📈 RESUMO GERAL', '', '', '', '']);
+    dashboardRows.push(['═══════════════════════════════════════════════════════════════════════════════', '', '', '', '']);
+    dashboardRows.push(['', '', '', '', '']);
+    dashboardRows.push(['Métrica', 'Quantidade', 'Percentual', 'Gráfico', '']);
+    dashboardRows.push(['───────────────────────────────────────────────────────────────────────────────', '', '', '', '']);
+    
+    const total = stats.totalAppointments || 1;
+    const scheduledPct = (stats.scheduledAppointments / total) * 100;
+    const completedPct = (stats.completedAppointments / total) * 100;
+    const cancelledPct = (stats.cancelledAppointments / total) * 100;
+    const noShowPct = (stats.noShowAppointments / total) * 100;
+    
+    const makeBar = (pct: number, char: string = '█') => {
+      const filled = Math.round(pct / 5);
+      return char.repeat(filled) + '░'.repeat(20 - filled);
+    };
+    
+    dashboardRows.push(['📋 Total de Agendamentos', String(stats.totalAppointments), '100%', '████████████████████', '']);
+    dashboardRows.push(['🕐 Agendados', String(stats.scheduledAppointments), `${scheduledPct.toFixed(1)}%`, makeBar(scheduledPct), '']);
+    dashboardRows.push(['✅ Concluídos', String(stats.completedAppointments), `${completedPct.toFixed(1)}%`, makeBar(completedPct), '']);
+    dashboardRows.push(['❌ Cancelados', String(stats.cancelledAppointments), `${cancelledPct.toFixed(1)}%`, makeBar(cancelledPct), '']);
+    dashboardRows.push(['⚠️ Faltas', String(stats.noShowAppointments), `${noShowPct.toFixed(1)}%`, makeBar(noShowPct), '']);
+    dashboardRows.push(['🚫 Usuários Suspensos', String(stats.suspendedUsers), '-', '', '']);
+    
+    dashboardRows.push(['', '', '', '', '']);
+    dashboardRows.push(['═══════════════════════════════════════════════════════════════════════════════', '', '', '', '']);
+    dashboardRows.push(['🥧 GRÁFICO DE PIZZA - STATUS DOS AGENDAMENTOS', '', '', '', '']);
+    dashboardRows.push(['═══════════════════════════════════════════════════════════════════════════════', '', '', '', '']);
+    dashboardRows.push(['', '', '', '', '']);
+    
+    // Gráfico de pizza ASCII
+    const pieData = [
+      { name: 'Agendados', value: stats.scheduledAppointments, icon: '🔵' },
+      { name: 'Concluídos', value: stats.completedAppointments, icon: '🟢' },
+      { name: 'Cancelados', value: stats.cancelledAppointments, icon: '⚪' },
+      { name: 'Faltas', value: stats.noShowAppointments, icon: '🟡' },
     ];
+    
+    dashboardRows.push(['', '         ████████████', '', '', '']);
+    dashboardRows.push(['', '      ████████████████████', '', '', '']);
+    dashboardRows.push(['', '    ████████████████████████', '', '', '']);
+    dashboardRows.push(['', '   ██████████████████████████', '', '', '']);
+    dashboardRows.push(['', '   ██████████████████████████', '', '', '']);
+    dashboardRows.push(['', '   ██████████████████████████', '', '', '']);
+    dashboardRows.push(['', '    ████████████████████████', '', '', '']);
+    dashboardRows.push(['', '      ████████████████████', '', '', '']);
+    dashboardRows.push(['', '         ████████████', '', '', '']);
+    dashboardRows.push(['', '', '', '', '']);
+    
+    // Legenda do gráfico de pizza
+    dashboardRows.push(['Legenda:', '', '', '', '']);
+    pieData.forEach(item => {
+      const pct = total > 0 ? ((item.value / total) * 100).toFixed(1) : '0';
+      dashboardRows.push([`${item.icon} ${item.name}`, String(item.value), `${pct}%`, '', '']);
+    });
+    
+    dashboardRows.push(['', '', '', '', '']);
+    dashboardRows.push(['═══════════════════════════════════════════════════════════════════════════════', '', '', '', '']);
+    dashboardRows.push(['🏥 DISTRIBUIÇÃO POR ESPECIALIDADE', '', '', '', '']);
+    dashboardRows.push(['═══════════════════════════════════════════════════════════════════════════════', '', '', '', '']);
+    dashboardRows.push(['', '', '', '', '']);
+    dashboardRows.push(['Especialidade', 'Quantidade', 'Percentual', 'Gráfico', '']);
+    dashboardRows.push(['───────────────────────────────────────────────────────────────────────────────', '', '', '', '']);
+    
+    stats.specialtyData.forEach(s => {
+      const pct = (s.value / total) * 100;
+      dashboardRows.push([`🏷️ ${s.name}`, String(s.value), `${pct.toFixed(1)}%`, makeBar(pct, '▓'), '']);
+    });
+    
+    dashboardRows.push(['', '', '', '', '']);
+    dashboardRows.push(['═══════════════════════════════════════════════════════════════════════════════', '', '', '', '']);
+    dashboardRows.push(['📅 AGENDAMENTOS POR MÊS', '', '', '', '']);
+    dashboardRows.push(['═══════════════════════════════════════════════════════════════════════════════', '', '', '', '']);
+    dashboardRows.push(['', '', '', '', '']);
+    dashboardRows.push(['Mês', 'Quantidade', '', 'Gráfico de Barras', '']);
+    dashboardRows.push(['───────────────────────────────────────────────────────────────────────────────', '', '', '', '']);
+    
+    const maxMonthly = Math.max(...stats.monthlyData.map(m => m.count), 1);
+    stats.monthlyData.forEach(m => {
+      const barSize = Math.round((m.count / maxMonthly) * 30);
+      dashboardRows.push([`📆 ${m.month}`, String(m.count), '', '▓'.repeat(barSize), '']);
+    });
+    
+    dashboardRows.push(['', '', '', '', '']);
+    dashboardRows.push(['═══════════════════════════════════════════════════════════════════════════════', '', '', '', '']);
+    dashboardRows.push(['', '', '', '', '']);
+    dashboardRows.push(['Relatório gerado automaticamente pelo Sistema de Agendamentos', '', '', '', '']);
 
-    const worksheetDashboard = XLSX.utils.json_to_sheet(dashboardData);
+    const worksheetDashboard = XLSX.utils.aoa_to_sheet(dashboardRows);
 
     const workbook = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(workbook, worksheetRelatorio, 'Relatório');
@@ -254,9 +328,11 @@ export default function AdminReports() {
 
     // Ajustar largura das colunas - Dashboard
     worksheetDashboard['!cols'] = [
-      { wch: 30 },
+      { wch: 35 },
       { wch: 15 },
-      { wch: 15 }
+      { wch: 12 },
+      { wch: 35 },
+      { wch: 5 }
     ];
 
     XLSX.writeFile(workbook, `relatorio-agendamentos-${format(new Date(), 'yyyy-MM-dd')}.xlsx`);
