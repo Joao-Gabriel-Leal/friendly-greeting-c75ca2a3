@@ -162,13 +162,13 @@ export default function Auth() {
     <div className="min-h-screen flex items-center justify-center bg-background p-4">
       <div className="w-full max-w-md animate-slide-up">
         <div className="text-center mb-8">
-          <div className="items-center">
-  <img 
-    src="/anademicon.png" 
-    alt="Ícone Anadem" 
-    className="h-19 w-19"
-  />
-</div>
+          <div className="flex justify-center items-center mb-4">
+            <img 
+              src="/anademicon.png" 
+              alt="Ícone Anadem" 
+              className="h-20 w-20"
+            />
+          </div>
           <h1 className="text-2xl font-bold text-foreground">Portal de Agendamentos</h1>
           <p className="text-muted-foreground mt-2">Massoterapia • Psicólogo • Nutricionista</p>
         </div>
