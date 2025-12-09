@@ -126,15 +126,19 @@ export default function MyAppointments({ onBack }: MyAppointmentsProps) {
 
       if (error) throw error;
 
-      // Apply suspension if cancelled same day
-      if (withSuspension && user) {
-        const suspendedUntil = new Date();
-        suspendedUntil.setDate(suspendedUntil.getDate() + 60);
+      // Apply specialty-specific suspension if cancelled same day
+      if (withSuspension && user && appointment.specialty_id) {
+        const blockedUntil = new Date();
+        blockedUntil.setDate(blockedUntil.getDate() + 60);
         
         await supabase
-          .from('profiles')
-          .update({ suspended_until: suspendedUntil.toISOString() })
-          .eq('user_id', user.id);
+          .from('user_specialty_blocks')
+          .insert({
+            user_id: user.id,
+            specialty_id: appointment.specialty_id,
+            blocked_until: blockedUntil.toISOString(),
+            reason: 'Cancelamento no dia do agendamento'
+          });
       }
 
       setCancellingId(null);
@@ -143,7 +147,7 @@ export default function MyAppointments({ onBack }: MyAppointmentsProps) {
       toast({
         title: 'Agendamento cancelado',
         description: withSuspension 
-          ? 'Você foi suspenso por 60 dias devido ao cancelamento no dia.'
+          ? `Você foi suspenso da especialidade "${appointment.specialty_name}" por 60 dias devido ao cancelamento no dia.`
           : 'Seu agendamento foi cancelado com sucesso.',
         variant: withSuspension ? 'destructive' : 'default',
       });
@@ -331,8 +335,8 @@ export default function MyAppointments({ onBack }: MyAppointmentsProps) {
               Atenção!
             </AlertDialogTitle>
             <AlertDialogDescription>
-              Cancelar no dia da consulta resultará em <strong>suspensão de 60 dias</strong>.
-              Tem certeza que deseja continuar?
+              Cancelar no dia da consulta resultará em <strong>suspensão de 60 dias nesta especialidade</strong>.
+              Você ainda poderá agendar em outras especialidades. Tem certeza que deseja continuar?
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
