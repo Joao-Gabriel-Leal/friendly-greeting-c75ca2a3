@@ -197,6 +197,7 @@ export default function AdminReports() {
   };
 
   const downloadExcel = () => {
+    // Aba 1: Relatório detalhado
     const data = appointmentReports.map(r => ({
       'Nome do Usuário': r.userName,
       'Email': r.userEmail,
@@ -209,10 +210,39 @@ export default function AdminReports() {
       'Status do Agendamento': getStatusLabel(r.status)
     }));
 
-    const worksheet = XLSX.utils.json_to_sheet(data);
-    const workbook = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(workbook, worksheet, 'Relatório');
+    const worksheetRelatorio = XLSX.utils.json_to_sheet(data);
+    
+    // Aba 2: Dashboard de métricas
+    const dashboardData = [
+      { 'Métrica': 'Total de Agendamentos', 'Valor': stats.totalAppointments, 'Percentual': '100%' },
+      { 'Métrica': 'Agendados', 'Valor': stats.scheduledAppointments, 'Percentual': stats.totalAppointments > 0 ? `${((stats.scheduledAppointments / stats.totalAppointments) * 100).toFixed(1)}%` : '0%' },
+      { 'Métrica': 'Concluídos', 'Valor': stats.completedAppointments, 'Percentual': `${completionRate}%` },
+      { 'Métrica': 'Cancelados', 'Valor': stats.cancelledAppointments, 'Percentual': `${cancelledRate}%` },
+      { 'Métrica': 'Faltas', 'Valor': stats.noShowAppointments, 'Percentual': `${noShowRate}%` },
+      { 'Métrica': 'Usuários Suspensos', 'Valor': stats.suspendedUsers, 'Percentual': '-' },
+      { 'Métrica': '', 'Valor': '', 'Percentual': '' },
+      { 'Métrica': '--- Por Especialidade ---', 'Valor': '', 'Percentual': '' },
+      ...stats.specialtyData.map(s => ({
+        'Métrica': s.name,
+        'Valor': s.value,
+        'Percentual': stats.totalAppointments > 0 ? `${((s.value / stats.totalAppointments) * 100).toFixed(1)}%` : '0%'
+      })),
+      { 'Métrica': '', 'Valor': '', 'Percentual': '' },
+      { 'Métrica': '--- Por Mês ---', 'Valor': '', 'Percentual': '' },
+      ...stats.monthlyData.map(m => ({
+        'Métrica': m.month,
+        'Valor': m.count,
+        'Percentual': '-'
+      })),
+    ];
 
+    const worksheetDashboard = XLSX.utils.json_to_sheet(dashboardData);
+
+    const workbook = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(workbook, worksheetRelatorio, 'Relatório');
+    XLSX.utils.book_append_sheet(workbook, worksheetDashboard, 'Dashboard');
+
+    // Ajustar largura das colunas - Relatório
     const maxWidths: number[] = [];
     data.forEach(row => {
       Object.values(row).forEach((val, i) => {
@@ -220,7 +250,14 @@ export default function AdminReports() {
         maxWidths[i] = Math.max(maxWidths[i] || 10, len);
       });
     });
-    worksheet['!cols'] = maxWidths.map(w => ({ wch: Math.min(w + 2, 50) }));
+    worksheetRelatorio['!cols'] = maxWidths.map(w => ({ wch: Math.min(w + 2, 50) }));
+
+    // Ajustar largura das colunas - Dashboard
+    worksheetDashboard['!cols'] = [
+      { wch: 30 },
+      { wch: 15 },
+      { wch: 15 }
+    ];
 
     XLSX.writeFile(workbook, `relatorio-agendamentos-${format(new Date(), 'yyyy-MM-dd')}.xlsx`);
   };
