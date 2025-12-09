@@ -22,6 +22,7 @@ export default function DateSelector({ professionalId, specialtyId, specialty, o
   const [loading, setLoading] = useState(true);
   const [availableDays, setAvailableDays] = useState<number[]>([]);
   const [blockedDates, setBlockedDates] = useState<Date[]>([]);
+  const [specificAvailableDates, setSpecificAvailableDates] = useState<Date[]>([]);
   const [existingAppointment, setExistingAppointment] = useState<{ id: string; date: string } | null>(null);
   const [selectedDate, setSelectedDate] = useState<Date | undefined>();
 
@@ -52,16 +53,26 @@ export default function DateSelector({ professionalId, specialtyId, specialty, o
         setAvailableDays(availableData.map(d => d.day_of_week));
       }
 
-      // Fetch blocked dates
+      // Fetch blocked dates (excluding AVAILABLE: entries which are specific available dates)
       const { data: blockedData } = await supabase
         .from('blocked_days')
-        .select('blocked_date')
+        .select('blocked_date, reason')
         .or(`professional_id.eq.${professionalId},professional_id.is.null`)
         .gte('blocked_date', format(today, 'yyyy-MM-dd'))
         .lte('blocked_date', format(maxDate, 'yyyy-MM-dd'));
 
       if (blockedData) {
-        setBlockedDates(blockedData.map(d => new Date(d.blocked_date + 'T12:00:00')));
+        // Separate blocked dates from specific available dates
+        const blocked = blockedData
+          .filter(d => !d.reason?.startsWith('AVAILABLE:'))
+          .map(d => new Date(d.blocked_date + 'T12:00:00'));
+        
+        const specificAvailable = blockedData
+          .filter(d => d.reason?.startsWith('AVAILABLE:'))
+          .map(d => new Date(d.blocked_date + 'T12:00:00'));
+        
+        setBlockedDates(blocked);
+        setSpecificAvailableDates(specificAvailable);
       }
     } catch (error) {
       console.error('Error fetching availability:', error);
@@ -101,6 +112,17 @@ export default function DateSelector({ professionalId, specialtyId, specialty, o
 
     if (normalizedDate < today || normalizedDate > maxDate) return false;
 
+    // Check if this date is blocked
+    if (blockedDates.some(blocked => isSameDay(blocked, date))) return false;
+
+    // Check if this is a Brazilian holiday
+    if (isBrazilianHoliday(date)) return false;
+
+    // Check if this date has specific availability configured (overrides weekly schedule)
+    if (specificAvailableDates.some(specific => isSameDay(specific, date))) {
+      return true;
+    }
+
     const dayOfWeek = date.getDay();
     
     // If available days are configured, check if this day is allowed
@@ -112,10 +134,6 @@ export default function DateSelector({ professionalId, specialtyId, specialty, o
     if (availableDays.length === 0 && (dayOfWeek === 0 || dayOfWeek === 6)) {
       return false;
     }
-
-    if (isBrazilianHoliday(date)) return false;
-
-    if (blockedDates.some(blocked => isSameDay(blocked, date))) return false;
 
     return true;
   };
