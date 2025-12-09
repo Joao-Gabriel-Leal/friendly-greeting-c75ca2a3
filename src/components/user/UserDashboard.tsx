@@ -114,9 +114,9 @@ export default function UserDashboard({ isSuspended, suspendedUntil }: UserDashb
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 rounded-xl gradient-primary flex items-center justify-center">
               <img 
-                src="/anademicon.png" 
-                alt="Anadem" 
-                className="h-6 w-6"
+                src="/favicon.ico" 
+                alt="Ícone Anadem" 
+                className="h-8 w-8"
               />
             </div>
             <div>
