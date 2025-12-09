@@ -36,7 +36,7 @@ interface User {
   suspended_until: string | null;
   blocked: boolean;
   created_at: string;
-  role: 'user' | 'admin' | 'professional';
+  role: 'user' | 'admin' | 'professional' | 'developer';
   specialtyBlocks?: { specialty_id: string; specialty_name: string; blocked_until: string | null }[];
 }
 
@@ -56,7 +56,7 @@ export default function AdminUsers() {
   const [showPasswordDialog, setShowPasswordDialog] = useState(false);
   const [showSuspendDialog, setShowSuspendDialog] = useState(false);
   const [showBlockDialog, setShowBlockDialog] = useState(false);
-  const [formData, setFormData] = useState({ name: '', email: '', role: 'user' as 'user' | 'admin', setor: '' });
+  const [formData, setFormData] = useState({ name: '', email: '', role: 'user' as 'user' | 'admin' | 'developer', setor: '' });
   const [newPassword, setNewPassword] = useState('');
   const [selectedSpecialties, setSelectedSpecialties] = useState<string[]>([]);
   const [blockReason, setBlockReason] = useState('');
@@ -94,7 +94,7 @@ export default function AdminUsers() {
 
       const usersWithRoles = profilesData
         .map(user => {
-          const role = (rolesMap.get(user.user_id) || 'user') as 'user' | 'admin' | 'professional';
+          const role = (rolesMap.get(user.user_id) || 'user') as 'user' | 'admin' | 'professional' | 'developer';
           const userBlocks = specialtyBlocksData
             ?.filter(b => b.user_id === user.user_id)
             .map(b => ({
@@ -110,8 +110,8 @@ export default function AdminUsers() {
             specialtyBlocks: userBlocks
           };
         })
-        // Filtrar apenas usuários e admins (excluir profissionais)
-        .filter(user => user.role !== 'professional');
+        // Filtrar apenas usuários e admins (excluir profissionais e desenvolvedores)
+        .filter(user => user.role !== 'professional' && user.role !== 'developer');
 
       setUsers(usersWithRoles);
     }
@@ -128,7 +128,7 @@ export default function AdminUsers() {
     setFormData({ 
       name: user.name, 
       email: user.email, 
-      role: user.role === 'professional' ? 'user' : user.role, 
+      role: user.role === 'professional' || user.role === 'developer' ? 'user' : user.role, 
       setor: user.setor || '' 
     });
     setShowDialog(true);
@@ -583,7 +583,7 @@ export default function AdminUsers() {
             </div>
             <div className="space-y-2">
               <Label>Tipo</Label>
-              <Select value={formData.role} onValueChange={(v: 'user' | 'admin') => setFormData({ ...formData, role: v })}>
+              <Select value={formData.role} onValueChange={(v: 'user' | 'admin') => setFormData({ ...formData, role: v as 'user' | 'admin' })}>
                 <SelectTrigger>
                   <SelectValue />
                 </SelectTrigger>
