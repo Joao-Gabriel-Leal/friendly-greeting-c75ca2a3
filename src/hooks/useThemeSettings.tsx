@@ -52,27 +52,35 @@ export function ThemeSettingsProvider({ children }: { children: ReactNode }) {
     console.log('[ThemeSettings] Setting theme toggle visible to:', visible);
     setThemeToggleVisibleState(visible);
 
-    // Try to update existing record
-    const { error: updateError, data: updateData } = await supabase
+    // First check if record exists
+    const { data: existingData } = await supabase
       .from('system_settings')
-      .update({ 
-        value: { visible },
-        updated_at: new Date().toISOString()
-      })
+      .select('id')
       .eq('key', 'theme_toggle_visible')
-      .select();
+      .maybeSingle();
 
-    console.log('[ThemeSettings] Update result:', updateData, 'Error:', updateError);
+    if (existingData) {
+      // Update existing record
+      const { error: updateError } = await supabase
+        .from('system_settings')
+        .update({ 
+          value: { visible },
+          updated_at: new Date().toISOString()
+        })
+        .eq('key', 'theme_toggle_visible');
 
-    // If no record was updated (doesn't exist), insert one
-    if (!updateData || updateData.length === 0) {
+      console.log('[ThemeSettings] Update result, error:', updateError);
+    } else {
+      // Insert new record
       console.log('[ThemeSettings] No record found, inserting...');
-      await supabase
+      const { error: insertError } = await supabase
         .from('system_settings')
         .insert({
           key: 'theme_toggle_visible',
           value: { visible }
         });
+      
+      console.log('[ThemeSettings] Insert result, error:', insertError);
     }
   };
 
