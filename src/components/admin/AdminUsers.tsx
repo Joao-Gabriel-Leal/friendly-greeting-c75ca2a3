@@ -14,6 +14,7 @@ import { useToast } from '@/hooks/use-toast';
 import { format, parseISO, addMonths } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { emailService } from '@/lib/emailService';
+import { useAuth } from '@/lib/auth';
 
 const DEPARTMENTS = [
   'Expedição',
@@ -50,6 +51,7 @@ interface Specialty {
 
 export default function AdminUsers() {
   const { toast } = useToast();
+  const { isDeveloper } = useAuth();
   const [loading, setLoading] = useState(true);
   const [users, setUsers] = useState<User[]>([]);
   const [specialties, setSpecialties] = useState<Specialty[]>([]);
@@ -71,7 +73,7 @@ export default function AdminUsers() {
   useEffect(() => {
     fetchUsers();
     fetchSpecialties();
-  }, []);
+  }, [isDeveloper]);
 
   const fetchUsers = async () => {
     const { data: profilesData, error: profilesError } = await supabase
@@ -116,8 +118,12 @@ export default function AdminUsers() {
             specialtyBlocks: userBlocks
           };
         })
-        // Filtrar apenas usuários e admins (excluir profissionais e desenvolvedores)
-        .filter(user => user.role !== 'professional' && user.role !== 'developer');
+        // Filtrar profissionais. Desenvolvedores só aparecem se o usuário logado for desenvolvedor
+        .filter(user => {
+          if (user.role === 'professional') return false;
+          if (user.role === 'developer') return isDeveloper;
+          return true;
+        });
 
       setUsers(usersWithRoles);
     }
@@ -377,7 +383,8 @@ export default function AdminUsers() {
   const getRoleLabel = (role: string) => {
     const labels: Record<string, string> = {
       admin: 'Admin',
-      user: 'Usuário'
+      user: 'Usuário',
+      developer: 'Desenvolvedor'
     };
     return labels[role] || 'Usuário';
   };
@@ -385,7 +392,8 @@ export default function AdminUsers() {
   const getRoleStyle = (role: string) => {
     const styles: Record<string, string> = {
       admin: 'bg-primary/10 text-primary',
-      user: 'bg-secondary text-secondary-foreground'
+      user: 'bg-secondary text-secondary-foreground',
+      developer: 'bg-amber-500/10 text-amber-600'
     };
     return styles[role] || styles.user;
   };
