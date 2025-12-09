@@ -1,0 +1,7 @@
+project_id = "eqocvvxtufyhfodmzglg"
+
+[functions.setup-initial-users]
+verify_jwt = false
+
+[functions.get-booked-slots]
+verify_jwt = false
