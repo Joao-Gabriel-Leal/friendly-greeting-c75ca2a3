@@ -13,7 +13,8 @@ import {
   BarChart3,
   Menu,
   X,
-  Settings
+  Settings,
+  CalendarPlus
 } from 'lucide-react';
 import AdminUsers from './AdminUsers';
 import AdminProfessionals from './AdminProfessionals';
@@ -22,8 +23,9 @@ import AdminBlockedDays from './AdminBlockedDays';
 import AdminAvailableDays from './AdminAvailableDays';
 import AdminReports from './AdminReports';
 import AdminSettings from './AdminSettings';
+import AdminMyBooking from './AdminMyBooking';
 
-type AdminTab = 'appointments' | 'users' | 'professionals' | 'blocked' | 'available' | 'reports' | 'settings';
+type AdminTab = 'appointments' | 'users' | 'professionals' | 'blocked' | 'available' | 'reports' | 'settings' | 'mybooking';
 
 interface AdminDashboardProps {
   showSettings?: boolean;
@@ -32,10 +34,11 @@ interface AdminDashboardProps {
 
 export default function AdminDashboard({ showSettings = false, roleLabel = 'Admin' }: AdminDashboardProps) {
   const { profile, signOut } = useAuth();
-  const [activeTab, setActiveTab] = useState<AdminTab>('appointments');
+  const [activeTab, setActiveTab] = useState<AdminTab>('mybooking');
   const [sidebarOpen, setSidebarOpen] = useState(false);
 
   const baseTabs = [
+    { id: 'mybooking' as AdminTab, label: 'Meu Agendamento', icon: CalendarPlus },
     { id: 'appointments' as AdminTab, label: 'Agendamentos', icon: CalendarDays },
     { id: 'users' as AdminTab, label: 'Usuários', icon: Users },
     { id: 'professionals' as AdminTab, label: 'Profissionais', icon: UserCog },
@@ -51,6 +54,8 @@ export default function AdminDashboard({ showSettings = false, roleLabel = 'Admi
 
   const renderContent = () => {
     switch (activeTab) {
+      case 'mybooking':
+        return <AdminMyBooking />;
       case 'appointments':
         return <AdminAppointments />;
       case 'users':
