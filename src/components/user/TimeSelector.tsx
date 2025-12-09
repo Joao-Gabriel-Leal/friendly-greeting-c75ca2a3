@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useMemo } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/lib/auth';
 import { Button } from '@/components/ui/button';
@@ -32,7 +32,7 @@ function generateTimeSlots(startTime: string, endTime: string): string[] {
 }
 
 export default function TimeSelector({ professionalId, professionalName, specialtyId, specialty, date, onComplete, onBack }: TimeSelectorProps) {
-  const { user, profile } = useAuth();
+  const { user } = useAuth();
   const { toast } = useToast();
   const [loading, setLoading] = useState(true);
   const [booking, setBooking] = useState(false);
@@ -40,31 +40,34 @@ export default function TimeSelector({ professionalId, professionalName, special
   const [availableTimeSlots, setAvailableTimeSlots] = useState<string[]>([]);
   const [selectedTime, setSelectedTime] = useState<string | null>(null);
 
+  const dateStr = useMemo(() => format(date, 'yyyy-MM-dd'), [date]);
+
   useEffect(() => {
     fetchAvailability();
-  }, [date, professionalId]);
+  }, [dateStr, professionalId]);
 
   const fetchAvailability = async () => {
     try {
       setLoading(true);
-      const dateStr = format(date, 'yyyy-MM-dd');
-      const dayOfWeek = date.getDay();
 
-      // First, check for specific date availability (AVAILABLE: entries in blocked_days)
-      const { data: specificAvailability } = await supabase
-        .from('blocked_days')
-        .select('reason')
-        .eq('professional_id', professionalId)
-        .eq('blocked_date', dateStr)
-        .like('reason', 'AVAILABLE:%');
+      // Buscar disponibilidade e slots ocupados em paralelo
+      const [availabilityResult, bookedResult] = await Promise.all([
+        supabase
+          .from('blocked_days')
+          .select('reason')
+          .eq('professional_id', professionalId)
+          .eq('blocked_date', dateStr)
+          .like('reason', 'AVAILABLE:%'),
+        supabase.functions.invoke('get-booked-slots', {
+          body: { professionalId, date: dateStr },
+        })
+      ]);
 
+      // Processar disponibilidade
       let timeSlots: string[] = [];
-
-      // Only use explicitly configured availability (no fallback to weekly schedule)
-      if (specificAvailability && specificAvailability.length > 0) {
-        specificAvailability.forEach(entry => {
+      if (availabilityResult.data && availabilityResult.data.length > 0) {
+        availabilityResult.data.forEach(entry => {
           if (entry.reason) {
-            // Parse "AVAILABLE: HH:MM - HH:MM" format
             const match = entry.reason.match(/AVAILABLE:\s*(\d{2}:\d{2})\s*-\s*(\d{2}:\d{2})/);
             if (match) {
               const [, startTime, endTime] = match;
@@ -74,24 +77,16 @@ export default function TimeSelector({ professionalId, professionalName, special
           }
         });
       }
-      // If no specific availability configured, timeSlots remains empty
 
-      // Remove duplicates and sort
+      // Remove duplicatas e ordena
       timeSlots = [...new Set(timeSlots)].sort();
       setAvailableTimeSlots(timeSlots);
 
-      // Fetch booked slots
-      const { data, error } = await supabase.functions.invoke('get-booked-slots', {
-        body: {
-          professionalId,
-          date: dateStr,
-        },
-      });
-
-      if (error) throw error;
-      
-      if (data?.bookedSlots) {
-        setBookedSlots(data.bookedSlots);
+      // Processar slots ocupados
+      if (bookedResult.data?.bookedSlots) {
+        setBookedSlots(bookedResult.data.bookedSlots);
+      } else {
+        setBookedSlots([]);
       }
     } catch (error) {
       console.error('Error fetching availability:', error);
@@ -111,7 +106,7 @@ export default function TimeSelector({ professionalId, professionalName, special
         user_id: user.id,
         professional_id: professionalId,
         specialty_id: specialtyId,
-        appointment_date: format(date, 'yyyy-MM-dd'),
+        appointment_date: dateStr,
         appointment_time: selectedTime + ':00',
       });
 
@@ -142,6 +137,19 @@ export default function TimeSelector({ professionalId, professionalName, special
     setBooking(false);
   };
 
+  const displaySlots = useMemo(() => {
+    const isSlotPast = (slot: string): boolean => {
+      if (!isToday(date)) return false;
+      const now = new Date();
+      const [hours, minutes] = slot.split(':').map(Number);
+      const slotTime = new Date();
+      slotTime.setHours(hours, minutes, 0, 0);
+      return slotTime <= now;
+    };
+
+    return availableTimeSlots.filter(slot => !isSlotPast(slot));
+  }, [availableTimeSlots, date]);
+
   if (loading) {
     return (
       <div className="flex items-center justify-center py-12">
@@ -149,17 +157,6 @@ export default function TimeSelector({ professionalId, professionalName, special
       </div>
     );
   }
-
-  const isSlotPast = (slot: string): boolean => {
-    if (!isToday(date)) return false;
-    const now = new Date();
-    const [hours, minutes] = slot.split(':').map(Number);
-    const slotTime = new Date();
-    slotTime.setHours(hours, minutes, 0, 0);
-    return slotTime <= now;
-  };
-
-  const displaySlots = availableTimeSlots.filter(slot => !isSlotPast(slot));
 
   return (
     <div className="max-w-md mx-auto animate-fade-in">

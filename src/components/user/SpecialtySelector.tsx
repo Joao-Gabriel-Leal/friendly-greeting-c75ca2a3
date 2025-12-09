@@ -1,12 +1,13 @@
 import { useEffect, useState } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/lib/auth';
+import { useAppData } from '@/hooks/useAppData';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { ArrowLeft, Loader2, Ban } from 'lucide-react';
 import { getSpecialtyIcon, getSpecialtyColor } from '@/lib/specialtyIcons';
 
-interface Specialty {
+interface SpecialtyWithProfessionals {
   id: string;
   name: string;
   professionals: { id: string; name: string }[];
@@ -20,58 +21,61 @@ interface SpecialtySelectorProps {
 
 export default function SpecialtySelector({ onSelect, onBack }: SpecialtySelectorProps) {
   const { user } = useAuth();
-  const [specialties, setSpecialties] = useState<Specialty[]>([]);
+  const { specialties, getSpecialtyProfessionals, loading: dataLoading } = useAppData();
+  const [specialtiesWithProfs, setSpecialtiesWithProfs] = useState<SpecialtyWithProfessionals[]>([]);
+  const [blockedSpecialtyIds, setBlockedSpecialtyIds] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    fetchSpecialties();
-  }, []);
+    fetchBlockedSpecialties();
+  }, [user]);
 
-  const fetchSpecialties = async () => {
+  useEffect(() => {
+    if (!dataLoading && specialties.length > 0) {
+      buildSpecialtiesList();
+    }
+  }, [dataLoading, specialties, blockedSpecialtyIds]);
+
+  const fetchBlockedSpecialties = async () => {
+    if (!user) {
+      setLoading(false);
+      return;
+    }
+
     try {
-      const { data: specialtiesData } = await supabase
-        .from('specialties')
-        .select('id, name')
-        .eq('active', true);
+      const { data: blocks } = await supabase
+        .from('user_specialty_blocks')
+        .select('specialty_id, blocked_until')
+        .eq('user_id', user.id);
 
-      const { data: profSpecData } = await supabase
-        .from('professional_specialties')
-        .select('specialty_id, professional_id, professionals (id, name)');
+      const blocked = (blocks || [])
+        .filter(b => !b.blocked_until || new Date(b.blocked_until) > new Date())
+        .map(b => b.specialty_id);
 
-      // Check for user specialty blocks
-      let blockedSpecialtyIds: string[] = [];
-      if (user) {
-        const { data: blocks } = await supabase
-          .from('user_specialty_blocks')
-          .select('specialty_id, blocked_until')
-          .eq('user_id', user.id);
-
-        blockedSpecialtyIds = (blocks || [])
-          .filter(b => !b.blocked_until || new Date(b.blocked_until) > new Date())
-          .map(b => b.specialty_id);
-      }
-
-      const specialtiesWithProfs = (specialtiesData || []).map(spec => {
-        const profs = profSpecData
-          ?.filter(ps => ps.specialty_id === spec.id)
-          .map(ps => ps.professionals as unknown as { id: string; name: string })
-          .filter(Boolean) || [];
-        
-        return { 
-          ...spec, 
-          professionals: profs,
-          isBlocked: blockedSpecialtyIds.includes(spec.id)
-        };
-      }).filter(s => s.professionals.length > 0);
-
-      setSpecialties(specialtiesWithProfs);
+      setBlockedSpecialtyIds(blocked);
     } catch (error) {
-      console.error('Error fetching specialties:', error);
+      console.error('Error fetching blocked specialties:', error);
     }
     setLoading(false);
   };
 
-  if (loading) {
+  const buildSpecialtiesList = () => {
+    const result = specialties
+      .map(spec => {
+        const profs = getSpecialtyProfessionals(spec.id);
+        return {
+          id: spec.id,
+          name: spec.name,
+          professionals: profs.map(p => ({ id: p.id, name: p.name })),
+          isBlocked: blockedSpecialtyIds.includes(spec.id)
+        };
+      })
+      .filter(s => s.professionals.length > 0);
+
+    setSpecialtiesWithProfs(result);
+  };
+
+  if (loading || dataLoading) {
     return (
       <div className="flex items-center justify-center py-12">
         <Loader2 className="h-8 w-8 animate-spin text-primary" />
@@ -92,7 +96,7 @@ export default function SpecialtySelector({ onSelect, onBack }: SpecialtySelecto
       </div>
 
       <div className="grid gap-4">
-        {specialties.map((spec) => (
+        {specialtiesWithProfs.map((spec) => (
           <Card 
             key={spec.id}
             className={`overflow-hidden transition-all ${
