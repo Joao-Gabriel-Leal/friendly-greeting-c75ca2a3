@@ -2,7 +2,6 @@ import { useState } from 'react';
 import { useAuth } from '@/lib/auth';
 import { Button } from '@/components/ui/button';
 import { ThemeToggle } from '@/components/ThemeToggle';
-import { NotificationBell } from '@/components/NotificationBell';
 import { 
   Calendar, 
   LogOut, 
@@ -148,7 +147,6 @@ export default function AdminDashboard() {
             </div>
             <div className="flex items-center gap-2">
               <ThemeToggle />
-              <NotificationBell />
             </div>
           </div>
         </header>
