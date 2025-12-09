@@ -313,18 +313,24 @@ export default function AdminProfessionals() {
                   <TableCell className="text-muted-foreground">{prof.email || '-'}</TableCell>
                   <TableCell>
                     <div className="flex flex-wrap gap-1">
-                      {prof.specialties.map(spec => (
-                        <span 
-                          key={spec} 
-                          className={`px-2 py-1 rounded-full text-xs font-medium ${
-                            spec === 'Massagem' ? 'bg-rose-100 text-rose-700' :
-                            spec === 'Psicologia' ? 'bg-violet-100 text-violet-700' :
-                            'bg-emerald-100 text-emerald-700'
-                          }`}
-                        >
-                          {spec}
-                        </span>
-                      ))}
+                      {prof.specialties.map(spec => {
+                        const colorMap: Record<string, string> = {
+                          'Massagem': 'bg-rose-100 text-rose-700 dark:bg-rose-900/30 dark:text-rose-300',
+                          'Nutricionista': 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300',
+                          'Nutrição': 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300',
+                          'Psicólogo': 'bg-violet-100 text-violet-700 dark:bg-violet-900/30 dark:text-violet-300',
+                          'Psicologia': 'bg-violet-100 text-violet-700 dark:bg-violet-900/30 dark:text-violet-300',
+                        };
+                        const colorClass = colorMap[spec] || 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300';
+                        return (
+                          <span 
+                            key={spec} 
+                            className={`px-2 py-1 rounded-full text-xs font-medium ${colorClass}`}
+                          >
+                            {spec}
+                          </span>
+                        );
+                      })}
                     </div>
                   </TableCell>
                   <TableCell>
