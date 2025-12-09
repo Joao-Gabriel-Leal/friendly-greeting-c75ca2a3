@@ -60,8 +60,8 @@ export default function TimeSelector({ professionalId, professionalName, special
 
       let timeSlots: string[] = [];
 
+      // Only use explicitly configured availability (no fallback to weekly schedule)
       if (specificAvailability && specificAvailability.length > 0) {
-        // Use specific availability for this date
         specificAvailability.forEach(entry => {
           if (entry.reason) {
             // Parse "AVAILABLE: HH:MM - HH:MM" format
@@ -73,23 +73,8 @@ export default function TimeSelector({ professionalId, professionalName, special
             }
           }
         });
-      } else {
-        // Fall back to weekly availability
-        const { data: weeklyAvailability } = await supabase
-          .from('available_days')
-          .select('start_time, end_time')
-          .eq('professional_id', professionalId)
-          .eq('day_of_week', dayOfWeek);
-
-        if (weeklyAvailability && weeklyAvailability.length > 0) {
-          weeklyAvailability.forEach(entry => {
-            const startTime = entry.start_time.substring(0, 5);
-            const endTime = entry.end_time.substring(0, 5);
-            const slots = generateTimeSlots(startTime, endTime);
-            timeSlots = [...timeSlots, ...slots];
-          });
-        }
       }
+      // If no specific availability configured, timeSlots remains empty
 
       // Remove duplicates and sort
       timeSlots = [...new Set(timeSlots)].sort();
