@@ -187,9 +187,13 @@ export default function AdminAvailableDays() {
 
     const dateStr = format(selectedCalendarDate, 'yyyy-MM-dd');
     
-    // Check if date already exists
-    if (specificDates.some(d => d.date === dateStr)) {
-      toast({ variant: 'destructive', title: 'Erro', description: 'Esta data já foi adicionada.' });
+    // Check if same date AND same time slot already exists
+    if (specificDates.some(d => 
+      d.date === dateStr && 
+      d.start_time === specificStartTime && 
+      d.end_time === specificEndTime
+    )) {
+      toast({ variant: 'destructive', title: 'Erro', description: 'Este horário já foi adicionado para esta data.' });
       return;
     }
 
@@ -208,27 +212,28 @@ export default function AdminAvailableDays() {
         start_time: specificStartTime, 
         end_time: specificEndTime 
       }]);
-      setSelectedCalendarDate(undefined);
       
-      toast({ title: 'Sucesso', description: 'Data específica adicionada.' });
+      toast({ title: 'Sucesso', description: 'Horário adicionado.' });
     } catch (error) {
       toast({ variant: 'destructive', title: 'Erro', description: 'Não foi possível adicionar.' });
     }
   };
 
-  const handleRemoveSpecificDate = async (dateStr: string) => {
+  const handleRemoveSpecificDate = async (dateStr: string, startTime: string, endTime: string) => {
     try {
       const { error } = await supabase
         .from('blocked_days')
         .delete()
         .eq('professional_id', selectedProfessional)
         .eq('blocked_date', dateStr)
-        .like('reason', 'AVAILABLE:%');
+        .eq('reason', `AVAILABLE:${startTime}-${endTime}`);
 
       if (error) throw error;
 
-      setSpecificDates(specificDates.filter(d => d.date !== dateStr));
-      toast({ title: 'Sucesso', description: 'Data removida.' });
+      setSpecificDates(specificDates.filter(d => 
+        !(d.date === dateStr && d.start_time === startTime && d.end_time === endTime)
+      ));
+      toast({ title: 'Sucesso', description: 'Horário removido.' });
     } catch (error) {
       toast({ variant: 'destructive', title: 'Erro', description: 'Não foi possível remover.' });
     }
@@ -424,10 +429,10 @@ export default function AdminAvailableDays() {
                   ) : (
                     <div className="space-y-2 max-h-96 overflow-y-auto">
                       {specificDates
-                        .sort((a, b) => a.date.localeCompare(b.date))
+                        .sort((a, b) => a.date.localeCompare(b.date) || a.start_time.localeCompare(b.start_time))
                         .map(d => (
                           <div 
-                            key={d.date} 
+                            key={`${d.date}-${d.start_time}-${d.end_time}`} 
                             className="flex items-center justify-between p-3 rounded-lg border bg-card"
                           >
                             <div>
@@ -442,13 +447,12 @@ export default function AdminAvailableDays() {
                               variant="ghost"
                               size="icon"
                               className="text-destructive hover:text-destructive"
-                              onClick={() => handleRemoveSpecificDate(d.date)}
+                              onClick={() => handleRemoveSpecificDate(d.date, d.start_time, d.end_time)}
                             >
                               <Trash2 className="h-4 w-4" />
                             </Button>
                           </div>
-                        ))
-                      }
+                        ))}
                     </div>
                   )}
                 </div>
