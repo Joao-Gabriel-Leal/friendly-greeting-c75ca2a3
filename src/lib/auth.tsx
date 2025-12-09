@@ -12,6 +12,7 @@ interface Profile {
   setor: string | null;
   suspended_until: string | null;
   blocked: boolean;
+  must_change_password: boolean;
   created_at: string;
   updated_at: string;
 }
@@ -29,6 +30,7 @@ interface AuthContextType {
   isDeveloper: boolean;
   isSuspended: boolean;
   isBlocked: boolean;
+  mustChangePassword: boolean;
   suspendedUntil: Date | null;
   refreshProfile: () => Promise<void>;
   userRole: 'admin' | 'professional' | 'user' | 'developer' | null;
@@ -59,6 +61,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setProfile({
         ...profileData,
         blocked: profileData?.blocked || false,
+        must_change_password: profileData?.must_change_password || false,
       });
 
       // Check user role
@@ -188,6 +191,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const suspendedUntil = profile?.suspended_until ? new Date(profile.suspended_until) : null;
   const isSuspended = suspendedUntil ? suspendedUntil > new Date() : false;
   const isBlocked = profile?.blocked || false;
+  const mustChangePassword = profile?.must_change_password || false;
   const isAdmin = userRole === 'admin';
   const isProfessional = userRole === 'professional';
   const isDeveloper = userRole === 'developer';
@@ -206,6 +210,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       isDeveloper,
       isSuspended,
       isBlocked,
+      mustChangePassword,
       suspendedUntil,
       refreshProfile,
       userRole

@@ -115,21 +115,20 @@ serve(async (req) => {
       );
     }
 
-    // Update profile with additional fields (phone, cpf)
+    // Update profile with additional fields (phone, cpf) and ensure must_change_password is true
     // The handle_new_user trigger creates the profile, we just need to update it
-    if (phone || cpf) {
-      const { error: updateError } = await supabaseAdmin
-        .from("profiles")
-        .update({
-          phone: phone || null,
-          cpf: cpf || null,
-        })
-        .eq("user_id", newUser.user.id);
+    const { error: updateError } = await supabaseAdmin
+      .from("profiles")
+      .update({
+        phone: phone || null,
+        cpf: cpf || null,
+        must_change_password: true, // Force password change on first login
+      })
+      .eq("user_id", newUser.user.id);
 
-      if (updateError) {
-        console.error("Error updating profile:", updateError);
-        // Don't fail the whole operation, user was created successfully
-      }
+    if (updateError) {
+      console.error("Error updating profile:", updateError);
+      // Don't fail the whole operation, user was created successfully
     }
 
     return new Response(
