@@ -14,7 +14,8 @@ import {
   Menu,
   X,
   Settings,
-  CalendarPlus
+  CalendarPlus,
+  FileUp
 } from 'lucide-react';
 import AdminUsers from './AdminUsers';
 import AdminProfessionals from './AdminProfessionals';
@@ -24,8 +25,9 @@ import AdminAvailableDays from './AdminAvailableDays';
 import AdminReports from './AdminReports';
 import AdminSettings from './AdminSettings';
 import AdminMyBooking from './AdminMyBooking';
+import AdminImportUsers from './AdminImportUsers';
 
-type AdminTab = 'appointments' | 'users' | 'professionals' | 'blocked' | 'available' | 'reports' | 'settings' | 'mybooking';
+type AdminTab = 'appointments' | 'users' | 'professionals' | 'blocked' | 'available' | 'reports' | 'settings' | 'mybooking' | 'import';
 
 interface AdminDashboardProps {
   showSettings?: boolean;
@@ -44,6 +46,7 @@ export default function AdminDashboard({ showSettings = false, roleLabel = 'Admi
     { id: 'appointments' as AdminTab, label: 'Agendamentos', icon: CalendarDays },
     { id: 'users' as AdminTab, label: 'Usuários', icon: Users },
     { id: 'professionals' as AdminTab, label: 'Profissionais', icon: UserCog },
+    { id: 'import' as AdminTab, label: 'Importar Usuários', icon: FileUp },
     { id: 'available' as AdminTab, label: 'Disponibilidade', icon: CalendarCheck },
     { id: 'blocked' as AdminTab, label: 'Dias Bloqueados', icon: Ban },
     { id: 'reports' as AdminTab, label: 'Relatórios', icon: BarChart3 },
@@ -52,6 +55,7 @@ export default function AdminDashboard({ showSettings = false, roleLabel = 'Admi
     { id: 'appointments' as AdminTab, label: 'Agendamentos', icon: CalendarDays },
     { id: 'users' as AdminTab, label: 'Usuários', icon: Users },
     { id: 'professionals' as AdminTab, label: 'Profissionais', icon: UserCog },
+    { id: 'import' as AdminTab, label: 'Importar Usuários', icon: FileUp },
     { id: 'available' as AdminTab, label: 'Disponibilidade', icon: CalendarCheck },
     { id: 'blocked' as AdminTab, label: 'Dias Bloqueados', icon: Ban },
     { id: 'reports' as AdminTab, label: 'Relatórios', icon: BarChart3 },
@@ -72,6 +76,8 @@ export default function AdminDashboard({ showSettings = false, roleLabel = 'Admi
         return <AdminUsers />;
       case 'professionals':
         return <AdminProfessionals />;
+      case 'import':
+        return <AdminImportUsers />;
       case 'blocked':
         return <AdminBlockedDays />;
       case 'available':
