@@ -5,6 +5,8 @@ import { X } from "lucide-react";
 
 import { cn } from "@/lib/utils";
 
+const TOAST_DURATION = 5000; // 5 segundos
+
 const ToastProvider = ToastPrimitives.Provider;
 
 const ToastViewport = React.forwardRef<
@@ -37,11 +39,39 @@ const toastVariants = cva(
   },
 );
 
+const ToastProgress = React.forwardRef<
+  HTMLDivElement,
+  React.HTMLAttributes<HTMLDivElement> & { variant?: "default" | "destructive" }
+>(({ className, variant = "default", ...props }, ref) => {
+  return (
+    <div
+      ref={ref}
+      className={cn(
+        "absolute bottom-0 left-0 h-1 w-full origin-left animate-[toast-progress_5s_linear_forwards]",
+        variant === "destructive" ? "bg-destructive-foreground/50" : "bg-primary",
+        className,
+      )}
+      {...props}
+    />
+  );
+});
+ToastProgress.displayName = "ToastProgress";
+
 const Toast = React.forwardRef<
   React.ElementRef<typeof ToastPrimitives.Root>,
   React.ComponentPropsWithoutRef<typeof ToastPrimitives.Root> & VariantProps<typeof toastVariants>
->(({ className, variant, ...props }, ref) => {
-  return <ToastPrimitives.Root ref={ref} className={cn(toastVariants({ variant }), className)} {...props} />;
+>(({ className, variant, children, ...props }, ref) => {
+  return (
+    <ToastPrimitives.Root 
+      ref={ref} 
+      className={cn(toastVariants({ variant }), className)} 
+      duration={TOAST_DURATION}
+      {...props}
+    >
+      {children}
+      <ToastProgress variant={variant || "default"} />
+    </ToastPrimitives.Root>
+  );
 });
 Toast.displayName = ToastPrimitives.Root.displayName;
 
@@ -108,4 +138,5 @@ export {
   ToastDescription,
   ToastClose,
   ToastAction,
+  TOAST_DURATION,
 };
