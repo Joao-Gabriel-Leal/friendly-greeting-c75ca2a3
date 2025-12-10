@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/lib/auth';
+import { useAppData } from '@/hooks/useAppData';
 import { Loader2 } from 'lucide-react';
 import UserDashboard from '@/components/user/UserDashboard';
 import AdminDashboard from '@/components/admin/AdminDashboard';
@@ -9,6 +10,7 @@ import ForcePasswordChange from '@/components/ForcePasswordChange';
 
 export default function Dashboard() {
   const { user, profile, loading, isAdmin, isProfessional, isDeveloper, isSuspended, suspendedUntil, mustChangePassword, refreshProfile } = useAuth();
+  const { refresh: refreshAppData } = useAppData();
   const navigate = useNavigate();
   const [showPasswordChange, setShowPasswordChange] = useState(false);
 
@@ -44,9 +46,11 @@ export default function Dashboard() {
   if (showPasswordChange) {
     return (
       <ForcePasswordChange 
-        onPasswordChanged={() => {
+        onPasswordChanged={async () => {
           setShowPasswordChange(false);
           refreshProfile();
+          // Força recarregar os dados do app (especialidades, profissionais) após troca de senha
+          await refreshAppData();
         }} 
       />
     );
