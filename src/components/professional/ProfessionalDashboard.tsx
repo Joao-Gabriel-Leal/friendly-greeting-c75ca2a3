@@ -10,7 +10,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Calendar } from '@/components/ui/calendar';
 import { ConditionalThemeToggle } from '@/components/ConditionalThemeToggle';
-import { Loader2, LogOut, CalendarDays, List, XCircle, Clock, CheckCircle } from 'lucide-react';
+import { Loader2, LogOut, CalendarDays, List, XCircle, Clock, CheckCircle, UserCheck, UserX } from 'lucide-react';
 import { format, parseISO, isSameDay } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { useToast } from '@/hooks/use-toast';
@@ -25,6 +25,8 @@ interface Appointment {
   specialty_name: string;
   user_name: string;
   user_email: string;
+  professional_confirmed: boolean;
+  user_confirmed: boolean;
 }
 
 interface Professional {
@@ -76,7 +78,7 @@ export default function ProfessionalDashboard() {
   const fetchAppointments = async (professionalId: string) => {
     const { data: appointmentsData } = await supabase
       .from('appointments')
-      .select('id, user_id, appointment_date, appointment_time, status, specialty_id')
+      .select('id, user_id, appointment_date, appointment_time, status, specialty_id, professional_confirmed, user_confirmed')
       .eq('professional_id', professionalId)
       .in('status', ['scheduled', 'completed'])
       .order('appointment_date', { ascending: true });
@@ -103,7 +105,9 @@ export default function ProfessionalDashboard() {
       status: a.status,
       specialty_name: specialtiesMap.get(a.specialty_id) || 'N/A',
       user_name: profilesMap.get(a.user_id)?.name || 'N/A',
-      user_email: profilesMap.get(a.user_id)?.email || 'N/A'
+      user_email: profilesMap.get(a.user_id)?.email || 'N/A',
+      professional_confirmed: a.professional_confirmed || false,
+      user_confirmed: a.user_confirmed || false
     }));
 
     setAppointments(enrichedAppointments);
@@ -181,6 +185,51 @@ export default function ProfessionalDashboard() {
   const handleSignOut = async () => {
     await signOut();
     navigate('/auth');
+  };
+
+  const handleConfirmAttendance = async (appointmentId: string) => {
+    try {
+      const { error } = await supabase
+        .from('appointments')
+        .update({ 
+          professional_confirmed: true,
+          professional_confirmed_at: new Date().toISOString(),
+          status: 'completed'
+        })
+        .eq('id', appointmentId);
+
+      if (error) throw error;
+
+      toast({ title: 'Sucesso', description: 'Presença confirmada. Aguardando confirmação do colaborador.' });
+      if (professional) fetchAppointments(professional.id);
+    } catch (error) {
+      console.error('Error confirming attendance:', error);
+      toast({ variant: 'destructive', title: 'Erro', description: 'Não foi possível confirmar a presença.' });
+    }
+  };
+
+  const handleMarkNoShow = async (appointmentId: string) => {
+    try {
+      const { error } = await supabase
+        .from('appointments')
+        .update({ status: 'no_show' })
+        .eq('id', appointmentId);
+
+      if (error) throw error;
+
+      toast({ title: 'Registrado', description: 'Falta registrada com sucesso.' });
+      if (professional) fetchAppointments(professional.id);
+    } catch (error) {
+      console.error('Error marking no-show:', error);
+      toast({ variant: 'destructive', title: 'Erro', description: 'Não foi possível registrar a falta.' });
+    }
+  };
+
+  const isAppointmentPast = (apt: Appointment) => {
+    const [hours, minutes] = apt.appointment_time.split(':').map(Number);
+    const appointmentDate = parseISO(apt.appointment_date);
+    appointmentDate.setHours(hours, minutes, 0, 0);
+    return appointmentDate < new Date();
   };
 
   const appointmentsForDate = appointments.filter(a => 
@@ -300,36 +349,69 @@ export default function ProfessionalDashboard() {
                     <div className="space-y-4">
                       {appointmentsForDate
                         .sort((a, b) => a.appointment_time.localeCompare(b.appointment_time))
-                        .map(apt => (
-                          <div 
-                            key={apt.id} 
-                            className="flex items-center justify-between p-4 rounded-lg border bg-card"
-                          >
-                            <div>
-                              <p className="font-medium">{apt.user_name}</p>
-                              <p className="text-sm text-muted-foreground">
-                                {apt.appointment_time.substring(0, 5)} - {apt.specialty_name}
-                              </p>
+                        .map(apt => {
+                          const isPast = isAppointmentPast(apt);
+                          const needsConfirmation = isPast && apt.status === 'scheduled';
+                          const awaitingUserConfirmation = apt.professional_confirmed && !apt.user_confirmed;
+                          
+                          return (
+                            <div 
+                              key={apt.id} 
+                              className="flex items-center justify-between p-4 rounded-lg border bg-card"
+                            >
+                              <div>
+                                <p className="font-medium">{apt.user_name}</p>
+                                <p className="text-sm text-muted-foreground">
+                                  {apt.appointment_time.substring(0, 5)} - {apt.specialty_name}
+                                </p>
+                                {awaitingUserConfirmation && (
+                                  <p className="text-xs text-warning mt-1">Aguardando assinatura do colaborador</p>
+                                )}
+                              </div>
+                              <div className="flex items-center gap-2">
+                                {apt.status === 'completed' && apt.professional_confirmed && apt.user_confirmed ? (
+                                  <span className="text-success flex items-center gap-1 text-sm">
+                                    <CheckCircle className="h-4 w-4" /> Assinado
+                                  </span>
+                                ) : apt.status === 'completed' && apt.professional_confirmed ? (
+                                  <span className="text-warning flex items-center gap-1 text-sm">
+                                    <Clock className="h-4 w-4" /> Aguardando
+                                  </span>
+                                ) : needsConfirmation ? (
+                                  <div className="flex gap-2">
+                                    <Button 
+                                      variant="default" 
+                                      size="sm"
+                                      onClick={() => handleConfirmAttendance(apt.id)}
+                                    >
+                                      <UserCheck className="h-4 w-4 mr-1" />
+                                      Compareceu
+                                    </Button>
+                                    <Button 
+                                      variant="outline" 
+                                      size="sm"
+                                      className="text-destructive hover:text-destructive"
+                                      onClick={() => handleMarkNoShow(apt.id)}
+                                    >
+                                      <UserX className="h-4 w-4 mr-1" />
+                                      Faltou
+                                    </Button>
+                                  </div>
+                                ) : apt.status === 'scheduled' ? (
+                                  <Button 
+                                    variant="outline" 
+                                    size="sm"
+                                    className="text-destructive hover:text-destructive"
+                                    onClick={() => handleOpenCancelDialog(apt)}
+                                  >
+                                    <XCircle className="h-4 w-4 mr-1" />
+                                    Cancelar
+                                  </Button>
+                                ) : null}
+                              </div>
                             </div>
-                            <div className="flex items-center gap-2">
-                              {apt.status === 'completed' ? (
-                                <span className="text-success flex items-center gap-1 text-sm">
-                                  <CheckCircle className="h-4 w-4" /> Concluído
-                                </span>
-                              ) : (
-                                <Button 
-                                  variant="outline" 
-                                  size="sm"
-                                  className="text-destructive hover:text-destructive"
-                                  onClick={() => handleOpenCancelDialog(apt)}
-                                >
-                                  <XCircle className="h-4 w-4 mr-1" />
-                                  Cancelar
-                                </Button>
-                              )}
-                            </div>
-                          </div>
-                        ))}
+                          );
+                        })}
                     </div>
                   )}
                 </CardContent>
@@ -357,36 +439,72 @@ export default function ProfessionalDashboard() {
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {appointments.map(apt => (
-                      <TableRow key={apt.id}>
-                        <TableCell>{format(parseISO(apt.appointment_date), 'dd/MM/yyyy')}</TableCell>
-                        <TableCell>{apt.appointment_time.substring(0, 5)}</TableCell>
-                        <TableCell className="font-medium">{apt.user_name}</TableCell>
-                        <TableCell>{apt.specialty_name}</TableCell>
-                        <TableCell>
-                          <span className={`px-2 py-1 rounded-full text-xs font-medium ${
-                            apt.status === 'completed' 
-                              ? 'bg-success/10 text-success' 
-                              : 'bg-primary/10 text-primary'
-                          }`}>
-                            {apt.status === 'completed' ? 'Concluído' : 'Agendado'}
-                          </span>
-                        </TableCell>
-                        <TableCell className="text-right">
-                          {apt.status === 'scheduled' && (
-                            <Button 
-                              variant="ghost" 
-                              size="sm"
-                              className="text-destructive hover:text-destructive"
-                              onClick={() => handleOpenCancelDialog(apt)}
-                            >
-                              <XCircle className="h-4 w-4 mr-1" />
-                              Cancelar
-                            </Button>
-                          )}
-                        </TableCell>
-                      </TableRow>
-                    ))}
+                    {appointments.map(apt => {
+                      const isPast = isAppointmentPast(apt);
+                      const needsConfirmation = isPast && apt.status === 'scheduled';
+                      const awaitingUserConfirmation = apt.professional_confirmed && !apt.user_confirmed;
+                      
+                      return (
+                        <TableRow key={apt.id}>
+                          <TableCell>{format(parseISO(apt.appointment_date), 'dd/MM/yyyy')}</TableCell>
+                          <TableCell>{apt.appointment_time.substring(0, 5)}</TableCell>
+                          <TableCell className="font-medium">{apt.user_name}</TableCell>
+                          <TableCell>{apt.specialty_name}</TableCell>
+                          <TableCell>
+                            {apt.status === 'completed' && apt.professional_confirmed && apt.user_confirmed ? (
+                              <span className="px-2 py-1 rounded-full text-xs font-medium bg-success/10 text-success">
+                                Assinado
+                              </span>
+                            ) : apt.status === 'completed' && apt.professional_confirmed ? (
+                              <span className="px-2 py-1 rounded-full text-xs font-medium bg-warning/10 text-warning">
+                                Aguardando assinatura
+                              </span>
+                            ) : (
+                              <span className={`px-2 py-1 rounded-full text-xs font-medium ${
+                                apt.status === 'completed' 
+                                  ? 'bg-success/10 text-success' 
+                                  : 'bg-primary/10 text-primary'
+                              }`}>
+                                {apt.status === 'completed' ? 'Concluído' : 'Agendado'}
+                              </span>
+                            )}
+                          </TableCell>
+                          <TableCell className="text-right">
+                            {needsConfirmation ? (
+                              <div className="flex justify-end gap-2">
+                                <Button 
+                                  variant="default" 
+                                  size="sm"
+                                  onClick={() => handleConfirmAttendance(apt.id)}
+                                >
+                                  <UserCheck className="h-4 w-4 mr-1" />
+                                  Compareceu
+                                </Button>
+                                <Button 
+                                  variant="outline" 
+                                  size="sm"
+                                  className="text-destructive hover:text-destructive"
+                                  onClick={() => handleMarkNoShow(apt.id)}
+                                >
+                                  <UserX className="h-4 w-4 mr-1" />
+                                  Faltou
+                                </Button>
+                              </div>
+                            ) : apt.status === 'scheduled' ? (
+                              <Button 
+                                variant="ghost" 
+                                size="sm"
+                                className="text-destructive hover:text-destructive"
+                                onClick={() => handleOpenCancelDialog(apt)}
+                              >
+                                <XCircle className="h-4 w-4 mr-1" />
+                                Cancelar
+                              </Button>
+                            ) : null}
+                          </TableCell>
+                        </TableRow>
+                      );
+                    })}
                   </TableBody>
                 </Table>
               </CardContent>

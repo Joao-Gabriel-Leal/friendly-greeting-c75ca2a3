@@ -51,10 +51,14 @@ export type Database = {
           created_at: string
           id: string
           notes: string | null
+          professional_confirmed: boolean | null
+          professional_confirmed_at: string | null
           professional_id: string | null
           specialty_id: string | null
           status: string
           updated_at: string
+          user_confirmed: boolean | null
+          user_confirmed_at: string | null
           user_id: string
         }
         Insert: {
@@ -63,10 +67,14 @@ export type Database = {
           created_at?: string
           id?: string
           notes?: string | null
+          professional_confirmed?: boolean | null
+          professional_confirmed_at?: string | null
           professional_id?: string | null
           specialty_id?: string | null
           status?: string
           updated_at?: string
+          user_confirmed?: boolean | null
+          user_confirmed_at?: string | null
           user_id: string
         }
         Update: {
@@ -75,10 +83,14 @@ export type Database = {
           created_at?: string
           id?: string
           notes?: string | null
+          professional_confirmed?: boolean | null
+          professional_confirmed_at?: string | null
           professional_id?: string | null
           specialty_id?: string | null
           status?: string
           updated_at?: string
+          user_confirmed?: boolean | null
+          user_confirmed_at?: string | null
           user_id?: string
         }
         Relationships: [

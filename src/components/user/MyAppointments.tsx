@@ -3,7 +3,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/lib/auth';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
-import { ArrowLeft, Loader2, Calendar, Clock, AlertTriangle, CheckCircle, XCircle } from 'lucide-react';
+import { ArrowLeft, Loader2, Calendar, Clock, AlertTriangle, CheckCircle, XCircle, PenLine } from 'lucide-react';
 import { format, isSameDay, parseISO } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { useToast } from '@/hooks/use-toast';
@@ -26,6 +26,8 @@ interface Appointment {
   appointment_time: string;
   status: string;
   professional_name: string;
+  professional_confirmed: boolean;
+  user_confirmed: boolean;
 }
 
 interface MyAppointmentsProps {
@@ -53,7 +55,7 @@ export default function MyAppointments({ onBack }: MyAppointmentsProps) {
     try {
       const { data: appointmentsData } = await supabase
         .from('appointments')
-        .select('id, specialty_id, appointment_date, appointment_time, status, professional_id')
+        .select('id, specialty_id, appointment_date, appointment_time, status, professional_id, professional_confirmed, user_confirmed')
         .eq('user_id', user.id)
         .order('appointment_date', { ascending: false });
 
@@ -77,7 +79,9 @@ export default function MyAppointments({ onBack }: MyAppointmentsProps) {
       const enrichedAppointments = appointmentsData.map(apt => ({
         ...apt,
         specialty_name: specialtiesMap.get(apt.specialty_id) || 'N/A',
-        professional_name: professionalsMap.get(apt.professional_id) || 'N/A'
+        professional_name: professionalsMap.get(apt.professional_id) || 'N/A',
+        professional_confirmed: apt.professional_confirmed || false,
+        user_confirmed: apt.user_confirmed || false
       }));
 
       setAppointments(enrichedAppointments);
@@ -85,6 +89,26 @@ export default function MyAppointments({ onBack }: MyAppointmentsProps) {
       console.error('Erro:', err);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleConfirmAttendance = async (appointmentId: string) => {
+    try {
+      const { error } = await supabase
+        .from('appointments')
+        .update({ 
+          user_confirmed: true,
+          user_confirmed_at: new Date().toISOString()
+        })
+        .eq('id', appointmentId);
+
+      if (error) throw error;
+
+      toast({ title: 'Sucesso', description: 'Presença confirmada com sucesso!' });
+      fetchAppointments();
+    } catch (error) {
+      console.error('Error confirming attendance:', error);
+      toast({ variant: 'destructive', title: 'Erro', description: 'Não foi possível confirmar a presença.' });
     }
   };
 
@@ -167,8 +191,18 @@ export default function MyAppointments({ onBack }: MyAppointmentsProps) {
     }
   };
 
-  const getStatusBadge = (status: string) => {
-    switch (status) {
+  const getStatusBadge = (appointment: Appointment) => {
+    // Check for fully signed appointments
+    if (appointment.status === 'completed' && appointment.professional_confirmed && appointment.user_confirmed) {
+      return (
+        <span className="inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium bg-success/10 text-success">
+          <CheckCircle className="h-3 w-3" />
+          Assinado
+        </span>
+      );
+    }
+
+    switch (appointment.status) {
       case 'scheduled':
         return (
           <span className="inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium bg-primary/10 text-primary">
@@ -219,6 +253,11 @@ export default function MyAppointments({ onBack }: MyAppointmentsProps) {
     return appointmentDate;
   };
 
+  // Appointments pending user confirmation (professional confirmed, user hasn't)
+  const pendingConfirmation = appointments
+    .filter(a => a.status === 'completed' && a.professional_confirmed && !a.user_confirmed)
+    .sort((a, b) => getAppointmentDateTime(b).getTime() - getAppointmentDateTime(a).getTime());
+
   const upcomingAppointments = appointments
     .filter(a => {
       if (a.status !== 'scheduled') return false;
@@ -229,6 +268,8 @@ export default function MyAppointments({ onBack }: MyAppointmentsProps) {
 
   const pastAppointments = appointments
     .filter(a => {
+      // Exclude pending confirmations from history
+      if (a.status === 'completed' && a.professional_confirmed && !a.user_confirmed) return false;
       if (a.status !== 'scheduled') return true;
       const appointmentDateTime = getAppointmentDateTime(a);
       return appointmentDateTime <= now;
@@ -246,6 +287,60 @@ export default function MyAppointments({ onBack }: MyAppointmentsProps) {
         <h2 className="text-2xl font-bold text-foreground mb-2">Meus Agendamentos</h2>
         <p className="text-muted-foreground">Gerencie suas consultas</p>
       </div>
+
+      {/* Pending Confirmations Section */}
+      {pendingConfirmation.length > 0 && (
+        <div className="mb-8">
+          <h3 className="text-lg font-semibold text-foreground mb-4 flex items-center gap-2">
+            <PenLine className="h-5 w-5 text-warning" />
+            Aguardando sua Assinatura
+          </h3>
+          <div className="space-y-4">
+            {pendingConfirmation.map(appointment => (
+              <Card key={appointment.id} className="overflow-hidden border-warning/50 bg-warning/5">
+                <CardContent className="p-0">
+                  <div className="flex items-stretch">
+                    <div className="w-20 bg-warning flex flex-col items-center justify-center text-warning-foreground p-4">
+                      <span className="text-2xl font-bold">
+                        {format(parseISO(appointment.appointment_date), 'dd')}
+                      </span>
+                      <span className="text-xs uppercase">
+                        {format(parseISO(appointment.appointment_date), 'MMM', { locale: ptBR })}
+                      </span>
+                    </div>
+                    <div className="flex-1 p-4">
+                      <div className="flex items-start justify-between">
+                        <div>
+                          <h4 className="font-semibold text-foreground">{appointment.specialty_name}</h4>
+                          <p className="text-sm text-muted-foreground">{appointment.professional_name}</p>
+                          <p className="text-sm text-muted-foreground mt-1">
+                            <Clock className="h-3 w-3 inline mr-1" />
+                            {appointment.appointment_time.substring(0, 5)}
+                          </p>
+                        </div>
+                        <div className="flex flex-col items-end gap-2">
+                          <span className="inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium bg-warning/10 text-warning">
+                            <PenLine className="h-3 w-3" />
+                            Pendente
+                          </span>
+                          <Button
+                            variant="default"
+                            size="sm"
+                            onClick={() => handleConfirmAttendance(appointment.id)}
+                          >
+                            <CheckCircle className="h-4 w-4 mr-1" />
+                            Assinar Presença
+                          </Button>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+            ))}
+          </div>
+        </div>
+      )}
 
       {upcomingAppointments.length > 0 && (
         <div className="mb-8">
@@ -274,7 +369,7 @@ export default function MyAppointments({ onBack }: MyAppointmentsProps) {
                           </p>
                         </div>
                         <div className="flex flex-col items-end gap-2">
-                          {getStatusBadge(appointment.status)}
+                          {getStatusBadge(appointment)}
                           <Button
                             variant="ghost"
                             size="sm"
@@ -308,7 +403,7 @@ export default function MyAppointments({ onBack }: MyAppointmentsProps) {
                         {format(parseISO(appointment.appointment_date), "dd/MM/yyyy", { locale: ptBR })} às {appointment.appointment_time.substring(0, 5)}
                       </p>
                     </div>
-                    {getStatusBadge(appointment.status)}
+                    {getStatusBadge(appointment)}
                   </div>
                 </CardContent>
               </Card>
