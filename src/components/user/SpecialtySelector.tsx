@@ -21,14 +21,23 @@ interface SpecialtySelectorProps {
 
 export default function SpecialtySelector({ onSelect, onBack }: SpecialtySelectorProps) {
   const { user } = useAuth();
-  const { specialties, getSpecialtyProfessionals, loading: dataLoading } = useAppData();
+  const { specialties, getSpecialtyProfessionals, loading: dataLoading, refresh } = useAppData();
   const [specialtiesWithProfs, setSpecialtiesWithProfs] = useState<SpecialtyWithProfessionals[]>([]);
   const [blockedSpecialtyIds, setBlockedSpecialtyIds] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
+  const [hasTriedRefresh, setHasTriedRefresh] = useState(false);
 
   useEffect(() => {
     fetchBlockedSpecialties();
   }, [user]);
+
+  // Se não há especialidades após carregar, força um refresh
+  useEffect(() => {
+    if (!dataLoading && specialties.length === 0 && !hasTriedRefresh) {
+      setHasTriedRefresh(true);
+      refresh();
+    }
+  }, [dataLoading, specialties.length, hasTriedRefresh, refresh]);
 
   useEffect(() => {
     if (!dataLoading && specialties.length > 0) {
@@ -75,7 +84,7 @@ export default function SpecialtySelector({ onSelect, onBack }: SpecialtySelecto
     setSpecialtiesWithProfs(result);
   };
 
-  if (loading || dataLoading) {
+  if (loading || dataLoading || (specialties.length === 0 && !hasTriedRefresh)) {
     return (
       <div className="flex items-center justify-center py-12">
         <Loader2 className="h-8 w-8 animate-spin text-primary" />
