@@ -258,6 +258,16 @@ export default function MyAppointments({ onBack }: MyAppointmentsProps) {
     .filter(a => a.status === 'completed' && a.professional_confirmed && !a.user_confirmed)
     .sort((a, b) => getAppointmentDateTime(b).getTime() - getAppointmentDateTime(a).getTime());
 
+  // Agendamentos pendentes de confirmação do profissional (passaram mas ainda não foram confirmados)
+  const pendingProfessionalConfirmation = appointments
+    .filter(a => {
+      if (a.status !== 'scheduled') return false;
+      const appointmentDateTime = getAppointmentDateTime(a);
+      // Passaram o horário mas ainda não foram confirmados pelo profissional
+      return appointmentDateTime <= now;
+    })
+    .sort((a, b) => getAppointmentDateTime(b).getTime() - getAppointmentDateTime(a).getTime());
+
   const upcomingAppointments = appointments
     .filter(a => {
       if (a.status !== 'scheduled') return false;
@@ -270,9 +280,10 @@ export default function MyAppointments({ onBack }: MyAppointmentsProps) {
     .filter(a => {
       // Exclude pending confirmations from history
       if (a.status === 'completed' && a.professional_confirmed && !a.user_confirmed) return false;
-      if (a.status !== 'scheduled') return true;
-      const appointmentDateTime = getAppointmentDateTime(a);
-      return appointmentDateTime <= now;
+      // Exclude scheduled appointments that passed but awaiting professional confirmation
+      if (a.status === 'scheduled') return false;
+      // Only show completed (with both confirmations), cancelled, or no_show
+      return ['completed', 'cancelled', 'no_show'].includes(a.status);
     })
     .sort((a, b) => getAppointmentDateTime(b).getTime() - getAppointmentDateTime(a).getTime());
 
@@ -332,6 +343,50 @@ export default function MyAppointments({ onBack }: MyAppointmentsProps) {
                             Assinar Presença
                           </Button>
                         </div>
+                      </div>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Pending Professional Confirmation Section */}
+      {pendingProfessionalConfirmation.length > 0 && (
+        <div className="mb-8">
+          <h3 className="text-lg font-semibold text-foreground mb-4 flex items-center gap-2">
+            <Clock className="h-5 w-5 text-muted-foreground" />
+            Aguardando Confirmação do Profissional
+          </h3>
+          <div className="space-y-4">
+            {pendingProfessionalConfirmation.map(appointment => (
+              <Card key={appointment.id} className="overflow-hidden border-muted bg-muted/10">
+                <CardContent className="p-0">
+                  <div className="flex items-stretch">
+                    <div className="w-20 bg-muted flex flex-col items-center justify-center text-muted-foreground p-4">
+                      <span className="text-2xl font-bold">
+                        {format(parseISO(appointment.appointment_date), 'dd')}
+                      </span>
+                      <span className="text-xs uppercase">
+                        {format(parseISO(appointment.appointment_date), 'MMM', { locale: ptBR })}
+                      </span>
+                    </div>
+                    <div className="flex-1 p-4">
+                      <div className="flex items-start justify-between">
+                        <div>
+                          <h4 className="font-semibold text-foreground">{appointment.specialty_name}</h4>
+                          <p className="text-sm text-muted-foreground">{appointment.professional_name}</p>
+                          <p className="text-sm text-muted-foreground mt-1">
+                            <Clock className="h-3 w-3 inline mr-1" />
+                            {appointment.appointment_time.substring(0, 5)}
+                          </p>
+                        </div>
+                        <span className="inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium bg-muted text-muted-foreground">
+                          <Clock className="h-3 w-3" />
+                          Aguardando profissional
+                        </span>
                       </div>
                     </div>
                   </div>

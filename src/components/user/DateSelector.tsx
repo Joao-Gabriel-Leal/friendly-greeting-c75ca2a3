@@ -86,19 +86,40 @@ export default function DateSelector({ professionalId, specialtyId, specialty, o
       const today = new Date();
       const monthStart = startOfMonth(today);
       const monthEnd = endOfMonth(today);
+      const todayStr = format(today, 'yyyy-MM-dd');
 
+      // Buscar agendamentos do mês
       const { data } = await supabase
         .from('appointments')
-        .select('id, appointment_date')
+        .select('id, appointment_date, appointment_time, status, professional_confirmed, user_confirmed')
         .eq('user_id', user.id)
         .eq('specialty_id', specialtyId)
         .in('status', ['scheduled', 'completed'])
         .gte('appointment_date', format(monthStart, 'yyyy-MM-dd'))
-        .lte('appointment_date', format(monthEnd, 'yyyy-MM-dd'))
-        .maybeSingle();
+        .lte('appointment_date', format(monthEnd, 'yyyy-MM-dd'));
 
-      if (data) {
-        setExistingAppointment({ id: data.id, date: data.appointment_date });
+      if (data && data.length > 0) {
+        // Verificar se existe agendamento que realmente bloqueia novo agendamento:
+        // 1. Agendamentos futuros (scheduled)
+        // 2. Agendamentos completed COM ambas confirmações
+        const blockingAppointment = data.find(apt => {
+          if (apt.status === 'scheduled') {
+            // Se é agendado e ainda não passou, bloqueia
+            const aptDate = new Date(apt.appointment_date + 'T' + apt.appointment_time);
+            if (aptDate > today) return true;
+            // Se passou mas profissional ainda não confirmou, também bloqueia (aguardando confirmação)
+            return !apt.professional_confirmed;
+          }
+          if (apt.status === 'completed') {
+            // Completed só bloqueia se ambos confirmaram
+            return apt.professional_confirmed && apt.user_confirmed;
+          }
+          return false;
+        });
+
+        if (blockingAppointment) {
+          setExistingAppointment({ id: blockingAppointment.id, date: blockingAppointment.appointment_date });
+        }
       }
     } catch (error) {
       console.error('Error checking existing appointment:', error);

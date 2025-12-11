@@ -42,7 +42,7 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
   const [loading, setLoading] = useState(true);
   const [lastFetch, setLastFetch] = useState<number>(0);
 
-  const fetchData = useCallback(async (force = false) => {
+  const fetchData = async (force = false) => {
     // Cache de 5 minutos
     const now = Date.now();
     if (!force && lastFetch > 0 && now - lastFetch < 5 * 60 * 1000) {
@@ -85,15 +85,16 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
     } finally {
       setLoading(false);
     }
-  }, [lastFetch]);
+  };
 
   useEffect(() => {
     fetchData();
   }, []);
 
   const refresh = useCallback(async () => {
+    setLastFetch(0); // Reset cache
     await fetchData(true);
-  }, [fetchData]);
+  }, []);
 
   const getSpecialtyProfessionals = useCallback((specialtyId: string): Professional[] => {
     return professionalSpecialties
