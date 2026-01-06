@@ -8,3 +8,15 @@ verify_jwt = false
 
 [functions.create-developer-account]
 verify_jwt = false
+
+[functions.create-professional-account]
+verify_jwt = false
+
+[functions.admin-update-password]
+verify_jwt = false
+
+[functions.import-user]
+verify_jwt = false
+
+[functions.apply-specialty-block]
+verify_jwt = false
