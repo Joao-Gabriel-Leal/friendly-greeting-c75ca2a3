@@ -41,6 +41,7 @@ export default function MyAppointments({ onBack }: MyAppointmentsProps) {
   const [appointments, setAppointments] = useState<Appointment[]>([]);
   const [cancellingId, setCancellingId] = useState<number | null>(null);
   const [showWarning, setShowWarning] = useState(false);
+  const [showConfirmCancel, setShowConfirmCancel] = useState(false);
 
   useEffect(() => {
     fetchAppointments();
@@ -69,8 +70,8 @@ export default function MyAppointments({ onBack }: MyAppointmentsProps) {
         professionalsApi.getAll()
       ]);
 
-      const specialtiesMap = new Map(allSpecialties.filter(s => specialtyIds.includes(s.id)).map(s => [s.id, s.name]));
-      const professionalsMap = new Map(allProfessionals.filter(p => professionalIds.includes(p.id)).map(p => [p.id, p.name]));
+      const specialtiesMap = new Map((allSpecialties || []).filter(s => specialtyIds.includes(s.id)).map(s => [s.id, s.name]));
+      const professionalsMap = new Map((allProfessionals || []).filter(p => professionalIds.includes(p.id)).map(p => [p.id, p.name]));
 
       const enrichedAppointments = appointmentsData.map(apt => ({
         ...apt,
@@ -103,8 +104,6 @@ export default function MyAppointments({ onBack }: MyAppointmentsProps) {
     }
   };
 
-  const [showConfirmCancel, setShowConfirmCancel] = useState(false);
-
   const handleCancelClick = (id: number, date: string) => {
     const appointmentDate = parseISO(date);
     const isToday = isSameDay(appointmentDate, new Date());
@@ -113,7 +112,6 @@ export default function MyAppointments({ onBack }: MyAppointmentsProps) {
     if (isToday) {
       setShowWarning(true);
     } else {
-      // Fora das 24h: mostrar confirmação antes de cancelar
       setShowConfirmCancel(true);
     }
   };
@@ -136,7 +134,6 @@ export default function MyAppointments({ onBack }: MyAppointmentsProps) {
         notes: withSuspension ? 'Cancelado no dia' : 'Cancelado pelo usuário'
       });
 
-      // Apply specialty-specific suspension if cancelled same day
       if (withSuspension && user && appointment.specialty_id) {
         const blockedUntil = new Date();
         blockedUntil.setDate(blockedUntil.getDate() + 60);
@@ -176,7 +173,6 @@ export default function MyAppointments({ onBack }: MyAppointmentsProps) {
   };
 
   const getStatusBadge = (appointment: Appointment) => {
-    // Check for fully signed appointments
     if (appointment.status === 'completed' && appointment.professional_confirmed && appointment.user_confirmed) {
       return (
         <span className="inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium bg-success/10 text-success">
@@ -237,17 +233,14 @@ export default function MyAppointments({ onBack }: MyAppointmentsProps) {
     return appointmentDate;
   };
 
-  // Appointments pending user confirmation (professional confirmed, user hasn't)
   const pendingConfirmation = appointments
     .filter(a => a.status === 'completed' && a.professional_confirmed && !a.user_confirmed)
     .sort((a, b) => getAppointmentDateTime(b).getTime() - getAppointmentDateTime(a).getTime());
 
-  // Agendamentos pendentes de confirmação do profissional (passaram mas ainda não foram confirmados)
   const pendingProfessionalConfirmation = appointments
     .filter(a => {
       if (a.status !== 'scheduled') return false;
       const appointmentDateTime = getAppointmentDateTime(a);
-      // Passaram o horário mas ainda não foram confirmados pelo profissional
       return appointmentDateTime <= now;
     })
     .sort((a, b) => getAppointmentDateTime(b).getTime() - getAppointmentDateTime(a).getTime());
@@ -262,11 +255,8 @@ export default function MyAppointments({ onBack }: MyAppointmentsProps) {
 
   const pastAppointments = appointments
     .filter(a => {
-      // Exclude pending confirmations from history
       if (a.status === 'completed' && a.professional_confirmed && !a.user_confirmed) return false;
-      // Exclude scheduled appointments that passed but awaiting professional confirmation
       if (a.status === 'scheduled') return false;
-      // Only show completed (with both confirmations), cancelled, or no_show
       return ['completed', 'cancelled', 'no_show'].includes(a.status);
     })
     .sort((a, b) => getAppointmentDateTime(b).getTime() - getAppointmentDateTime(a).getTime());
@@ -283,7 +273,6 @@ export default function MyAppointments({ onBack }: MyAppointmentsProps) {
         <p className="text-muted-foreground">Gerencie suas consultas</p>
       </div>
 
-      {/* Pending Confirmations Section */}
       {pendingConfirmation.length > 0 && (
         <div className="mb-8">
           <h3 className="text-lg font-semibold text-foreground mb-4 flex items-center gap-2">
@@ -337,7 +326,6 @@ export default function MyAppointments({ onBack }: MyAppointmentsProps) {
         </div>
       )}
 
-      {/* Pending Professional Confirmation Section */}
       {pendingProfessionalConfirmation.length > 0 && (
         <div className="mb-8">
           <h3 className="text-lg font-semibold text-foreground mb-4 flex items-center gap-2">
@@ -474,7 +462,6 @@ export default function MyAppointments({ onBack }: MyAppointmentsProps) {
         </Card>
       )}
 
-      {/* Warning Dialog for same-day cancellation */}
       <AlertDialog open={showWarning} onOpenChange={setShowWarning}>
         <AlertDialogContent>
           <AlertDialogHeader>
@@ -504,7 +491,6 @@ export default function MyAppointments({ onBack }: MyAppointmentsProps) {
         </AlertDialogContent>
       </AlertDialog>
 
-      {/* Regular cancellation confirmation */}
       <AlertDialog open={showConfirmCancel} onOpenChange={setShowConfirmCancel}>
         <AlertDialogContent>
           <AlertDialogHeader>

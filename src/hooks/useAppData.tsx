@@ -43,7 +43,6 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
   const [lastFetch, setLastFetch] = useState<number>(0);
 
   const fetchData = useCallback(async (force = false) => {
-    // Cache de 5 minutos - mas apenas se já temos dados
     const now = Date.now();
     const hasData = professionals.length > 0 && specialties.length > 0;
     
@@ -54,20 +53,17 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
     try {
       setLoading(true);
       
-      // Buscar tudo em paralelo usando a API local
       const [profsResult, specsResult] = await Promise.all([
         professionalsApi.list(true),
         specialtiesApi.list(true),
       ]);
 
-      if (profsResult.data) setProfessionals(profsResult.data);
-      if (specsResult.data) setSpecialties(specsResult.data);
+      if (profsResult) setProfessionals(profsResult);
+      if (specsResult) setSpecialties(specsResult);
 
-      // Construir professionalSpecialties a partir dos profissionais retornados
-      // que já incluem suas especialidades
-      if (profsResult.data) {
+      if (profsResult) {
         const profSpecs: ProfessionalSpecialty[] = [];
-        profsResult.data.forEach((prof: any) => {
+        profsResult.forEach((prof: any) => {
           if (prof.specialties) {
             prof.specialties.forEach((specId: number) => {
               profSpecs.push({
@@ -94,7 +90,7 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const refresh = useCallback(async () => {
-    setLastFetch(0); // Reset cache
+    setLastFetch(0);
     await fetchData(true);
   }, []);
 

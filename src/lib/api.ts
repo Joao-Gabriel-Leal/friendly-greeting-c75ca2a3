@@ -10,7 +10,7 @@ interface ApiResponse<T = any> {
 async function fetchApi<T>(
   endpoint: string,
   options: RequestInit = {}
-): Promise<ApiResponse<T>> {
+): Promise<T> {
   const token = localStorage.getItem('auth_token');
   
   const headers: HeadersInit = {
@@ -28,13 +28,13 @@ async function fetchApi<T>(
     const data = await response.json();
 
     if (!response.ok) {
-      return { error: data.error || 'Erro na requisição' };
+      throw new Error(data.error || 'Erro na requisição');
     }
 
-    return { data };
-  } catch (error) {
+    return data;
+  } catch (error: any) {
     console.error('API Error:', error);
-    return { error: 'Erro de conexão com o servidor' };
+    throw error;
   }
 }
 
@@ -51,8 +51,8 @@ export const authApi = {
       body: JSON.stringify({ email, password }),
     });
     
-    if (response.data?.token) {
-      localStorage.setItem('auth_token', response.data.token);
+    if (response?.token) {
+      localStorage.setItem('auth_token', response.token);
     }
     
     return response;
@@ -97,11 +97,26 @@ export const appointmentsApi = {
     return fetchApi<any[]>(`/appointments${query}`);
   },
 
-  getByUser: async () => {
-    return fetchApi<any[]>('/appointments/my');
+  getByUser: async (userId: number) => {
+    return fetchApi<any[]>(`/appointments/user/${userId}`);
+  },
+
+  getByProfessional: async (professionalId: number) => {
+    return fetchApi<any[]>(`/appointments/professional/${professionalId}`);
+  },
+
+  checkExisting: async (userId: number, specialtyId: number, startDate: string, endDate: string) => {
+    const params = new URLSearchParams({
+      user_id: String(userId),
+      specialty_id: String(specialtyId),
+      start_date: startDate,
+      end_date: endDate
+    });
+    return fetchApi<any[]>(`/appointments/check-existing?${params.toString()}`);
   },
 
   create: async (data: {
+    user_id: number;
     professional_id: number;
     specialty_id: number;
     appointment_date: string;
@@ -118,7 +133,9 @@ export const appointmentsApi = {
     status: string;
     notes: string;
     professional_confirmed: boolean;
+    professional_confirmed_at: string;
     user_confirmed: boolean;
+    user_confirmed_at: string;
   }>) => {
     return fetchApi(`/appointments/${id}`, {
       method: 'PUT',
@@ -133,7 +150,7 @@ export const appointmentsApi = {
   },
 
   getBookedSlots: async (professionalId: number, date: string) => {
-    return fetchApi<string[]>(`/appointments/booked-slots?professional_id=${professionalId}&date=${date}`);
+    return fetchApi<{ bookedSlots: string[] }>(`/appointments/booked-slots?professional_id=${professionalId}&date=${date}`);
   },
 };
 
@@ -143,8 +160,16 @@ export const professionalsApi = {
     return fetchApi<any[]>(`/professionals${activeOnly ? '?active=true' : ''}`);
   },
 
+  getAll: async () => {
+    return fetchApi<any[]>('/professionals');
+  },
+
   getById: async (id: number) => {
-    return fetchApi(`/professionals/${id}`);
+    return fetchApi<any>(`/professionals/${id}`);
+  },
+
+  getByUserId: async (userId: number) => {
+    return fetchApi<any>(`/professionals/user/${userId}`);
   },
 
   create: async (data: {
@@ -189,8 +214,12 @@ export const specialtiesApi = {
     return fetchApi<any[]>(`/specialties${activeOnly ? '?active=true' : ''}`);
   },
 
+  getAll: async () => {
+    return fetchApi<any[]>('/specialties');
+  },
+
   getById: async (id: number) => {
-    return fetchApi(`/specialties/${id}`);
+    return fetchApi<any>(`/specialties/${id}`);
   },
 
   create: async (data: {
@@ -225,6 +254,10 @@ export const specialtiesApi = {
 
 // ==================== AVAILABILITY ====================
 export const availabilityApi = {
+  getAvailableDays: async (professionalId: number) => {
+    return fetchApi<any[]>(`/availability/professional/${professionalId}/days`);
+  },
+
   getByProfessional: async (professionalId: number) => {
     return fetchApi<any[]>(`/availability/professional/${professionalId}`);
   },
@@ -240,8 +273,12 @@ export const availabilityApi = {
     });
   },
 
-  getBlockedDays: async (professionalId?: number) => {
-    const query = professionalId ? `?professional_id=${professionalId}` : '';
+  getBlockedDays: async (professionalId?: number, startDate?: string, endDate?: string) => {
+    const params = new URLSearchParams();
+    if (professionalId) params.append('professional_id', String(professionalId));
+    if (startDate) params.append('start_date', startDate);
+    if (endDate) params.append('end_date', endDate);
+    const query = params.toString() ? `?${params.toString()}` : '';
     return fetchApi<any[]>(`/availability/blocked${query}`);
   },
 
@@ -263,6 +300,10 @@ export const availabilityApi = {
     });
   },
 
+  getBookedSlots: async (professionalId: number, date: string) => {
+    return fetchApi<{ bookedSlots: string[] }>(`/availability/booked-slots?professional_id=${professionalId}&date=${date}`);
+  },
+
   getAvailableSlots: async (professionalId: number, date: string, durationMinutes: number) => {
     return fetchApi<string[]>(
       `/availability/slots?professional_id=${professionalId}&date=${date}&duration=${durationMinutes}`
@@ -277,7 +318,17 @@ export const profilesApi = {
   },
 
   getById: async (id: number) => {
-    return fetchApi(`/profiles/${id}`);
+    return fetchApi<any>(`/profiles/${id}`);
+  },
+
+  getByUserId: async (userId: number) => {
+    return fetchApi<any>(`/profiles/user/${userId}`);
+  },
+
+  getByUserIds: async (userIds: number[]) => {
+    const params = new URLSearchParams();
+    userIds.forEach(id => params.append('user_ids', String(id)));
+    return fetchApi<any[]>(`/profiles/by-users?${params.toString()}`);
   },
 
   update: async (id: number, data: Partial<{
@@ -310,6 +361,31 @@ export const profilesApi = {
   },
 };
 
+// ==================== SPECIALTY BLOCKS ====================
+export const specialtyBlocksApi = {
+  getByUser: async (userId: number) => {
+    return fetchApi<any[]>(`/specialty-blocks/user/${userId}`);
+  },
+
+  create: async (data: {
+    user_id: number;
+    specialty_id: number;
+    blocked_until?: string;
+    reason?: string;
+  }) => {
+    return fetchApi('/specialty-blocks', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  },
+
+  delete: async (id: number) => {
+    return fetchApi(`/specialty-blocks/${id}`, {
+      method: 'DELETE',
+    });
+  },
+};
+
 // ==================== SETTINGS ====================
 export const settingsApi = {
   get: async (key: string) => {
@@ -336,6 +412,7 @@ export const api = {
   specialties: specialtiesApi,
   availability: availabilityApi,
   profiles: profilesApi,
+  specialtyBlocks: specialtyBlocksApi,
   settings: settingsApi,
 };
 

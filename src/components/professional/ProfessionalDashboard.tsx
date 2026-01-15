@@ -58,7 +58,6 @@ export default function ProfessionalDashboard() {
     if (!user) return;
 
     try {
-      // Get professional linked to this user
       const profData = await professionalsApi.getByUserId(user.id);
 
       if (!profData) {
@@ -81,7 +80,6 @@ export default function ProfessionalDashboard() {
 
       if (!appointmentsData) return;
 
-      // Get user info and specialty names
       const userIds = [...new Set(appointmentsData.map(a => a.user_id))];
       const specialtyIds = [...new Set(appointmentsData.map(a => a.specialty_id).filter(Boolean))];
 
@@ -90,11 +88,11 @@ export default function ProfessionalDashboard() {
         specialtiesApi.getAll()
       ]);
 
-      const profilesMap = new Map(profilesData?.map(p => [p.user_id, p]) || []);
+      const profilesMap = new Map((profilesData || []).map(p => [p.user_id, p]));
       const specialtiesMap = new Map(
-        specialtiesData
-          ?.filter(s => specialtyIds.includes(s.id))
-          .map(s => [s.id, s.name]) || []
+        (specialtiesData || [])
+          .filter(s => specialtyIds.includes(s.id))
+          .map(s => [s.id, s.name])
       );
 
       const enrichedAppointments: Appointment[] = appointmentsData.map(a => ({
@@ -130,7 +128,6 @@ export default function ProfessionalDashboard() {
     try {
       await appointmentsApi.update(cancelingAppointment.id, { status: 'cancelled' });
 
-      // Send cancellation email to user
       await emailService.sendCancellationEmail({
         userEmail: cancelingAppointment.user_email,
         userName: cancelingAppointment.user_name,
@@ -223,7 +220,6 @@ export default function ProfessionalDashboard() {
 
   return (
     <div className="min-h-screen bg-background">
-      {/* Header */}
       <header className="border-b bg-card/50 backdrop-blur-sm sticky top-0 z-50">
         <div className="container mx-auto px-4 py-4 flex justify-between items-center">
           <div className="flex items-center gap-3">
@@ -263,7 +259,6 @@ export default function ProfessionalDashboard() {
             </TabsTrigger>
           </TabsList>
 
-          {/* Calendar View */}
           <TabsContent value="calendar">
             <div className="grid lg:grid-cols-2 gap-6">
               <Card>
@@ -377,7 +372,6 @@ export default function ProfessionalDashboard() {
             </div>
           </TabsContent>
 
-          {/* List View */}
           <TabsContent value="list">
             <Card>
               <CardHeader>
@@ -465,7 +459,6 @@ export default function ProfessionalDashboard() {
         </Tabs>
       </main>
 
-      {/* Cancel Dialog */}
       <Dialog open={showCancelDialog} onOpenChange={setShowCancelDialog}>
         <DialogContent>
           <DialogHeader>

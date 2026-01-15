@@ -58,7 +58,7 @@ export default function TimeSelector({ professionalId, professionalName, special
 
       // Processar disponibilidade
       let timeSlots: string[] = [];
-      const availableEntries = availabilityResult.filter(entry => entry.reason?.startsWith('AVAILABLE:'));
+      const availableEntries = (availabilityResult || []).filter(entry => entry.reason?.startsWith('AVAILABLE:'));
       
       if (availableEntries.length > 0) {
         availableEntries.forEach(entry => {
