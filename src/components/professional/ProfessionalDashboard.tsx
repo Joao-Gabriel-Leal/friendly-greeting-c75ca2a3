@@ -1,6 +1,5 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/lib/auth';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
@@ -15,10 +14,11 @@ import { format, parseISO, isSameDay } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { useToast } from '@/hooks/use-toast';
 import { emailService } from '@/lib/emailService';
+import { professionalsApi, appointmentsApi, specialtiesApi, profilesApi } from '@/lib/api';
 
 interface Appointment {
-  id: string;
-  user_id: string;
+  id: number;
+  user_id: number;
   appointment_date: string;
   appointment_time: string;
   status: string;
@@ -30,7 +30,7 @@ interface Appointment {
 }
 
 interface Professional {
-  id: string;
+  id: number;
   name: string;
 }
 
@@ -57,60 +57,63 @@ export default function ProfessionalDashboard() {
   const fetchProfessionalData = async () => {
     if (!user) return;
 
-    // Get professional linked to this user
-    const { data: profData, error: profError } = await supabase
-      .from('professionals')
-      .select('id, name')
-      .eq('user_id', user.id)
-      .maybeSingle();
+    try {
+      // Get professional linked to this user
+      const profData = await professionalsApi.getByUserId(user.id);
 
-    if (profError || !profData) {
-      console.error('Error fetching professional:', profError);
-      setLoading(false);
-      return;
+      if (!profData) {
+        console.error('Professional not found for user');
+        setLoading(false);
+        return;
+      }
+
+      setProfessional(profData);
+      await fetchAppointments(profData.id);
+    } catch (error) {
+      console.error('Error fetching professional:', error);
     }
-
-    setProfessional(profData);
-    await fetchAppointments(profData.id);
     setLoading(false);
   };
 
-  const fetchAppointments = async (professionalId: string) => {
-    const { data: appointmentsData } = await supabase
-      .from('appointments')
-      .select('id, user_id, appointment_date, appointment_time, status, specialty_id, professional_confirmed, user_confirmed')
-      .eq('professional_id', professionalId)
-      .in('status', ['scheduled', 'completed'])
-      .order('appointment_date', { ascending: true });
+  const fetchAppointments = async (professionalId: number) => {
+    try {
+      const appointmentsData = await appointmentsApi.getByProfessional(professionalId);
 
-    if (!appointmentsData) return;
+      if (!appointmentsData) return;
 
-    // Get user info and specialty names
-    const userIds = [...new Set(appointmentsData.map(a => a.user_id))];
-    const specialtyIds = [...new Set(appointmentsData.map(a => a.specialty_id).filter(Boolean))];
+      // Get user info and specialty names
+      const userIds = [...new Set(appointmentsData.map(a => a.user_id))];
+      const specialtyIds = [...new Set(appointmentsData.map(a => a.specialty_id).filter(Boolean))];
 
-    const [profilesRes, specialtiesRes] = await Promise.all([
-      supabase.from('profiles').select('user_id, name, email').in('user_id', userIds),
-      supabase.from('specialties').select('id, name').in('id', specialtyIds)
-    ]);
+      const [profilesData, specialtiesData] = await Promise.all([
+        profilesApi.getByUserIds(userIds),
+        specialtiesApi.getAll()
+      ]);
 
-    const profilesMap = new Map(profilesRes.data?.map(p => [p.user_id, p]) || []);
-    const specialtiesMap = new Map(specialtiesRes.data?.map(s => [s.id, s.name]) || []);
+      const profilesMap = new Map(profilesData?.map(p => [p.user_id, p]) || []);
+      const specialtiesMap = new Map(
+        specialtiesData
+          ?.filter(s => specialtyIds.includes(s.id))
+          .map(s => [s.id, s.name]) || []
+      );
 
-    const enrichedAppointments: Appointment[] = appointmentsData.map(a => ({
-      id: a.id,
-      user_id: a.user_id,
-      appointment_date: a.appointment_date,
-      appointment_time: a.appointment_time,
-      status: a.status,
-      specialty_name: specialtiesMap.get(a.specialty_id) || 'N/A',
-      user_name: profilesMap.get(a.user_id)?.name || 'N/A',
-      user_email: profilesMap.get(a.user_id)?.email || 'N/A',
-      professional_confirmed: a.professional_confirmed || false,
-      user_confirmed: a.user_confirmed || false
-    }));
+      const enrichedAppointments: Appointment[] = appointmentsData.map(a => ({
+        id: a.id,
+        user_id: a.user_id,
+        appointment_date: a.appointment_date,
+        appointment_time: a.appointment_time,
+        status: a.status,
+        specialty_name: specialtiesMap.get(a.specialty_id) || 'N/A',
+        user_name: profilesMap.get(a.user_id)?.name || 'N/A',
+        user_email: profilesMap.get(a.user_id)?.email || 'N/A',
+        professional_confirmed: a.professional_confirmed || false,
+        user_confirmed: a.user_confirmed || false
+      }));
 
-    setAppointments(enrichedAppointments);
+      setAppointments(enrichedAppointments);
+    } catch (error) {
+      console.error('Error fetching appointments:', error);
+    }
   };
 
   const handleOpenCancelDialog = (appointment: Appointment) => {
@@ -125,13 +128,7 @@ export default function ProfessionalDashboard() {
     setCanceling(true);
 
     try {
-      // Update appointment status
-      const { error } = await supabase
-        .from('appointments')
-        .update({ status: 'cancelled' })
-        .eq('id', cancelingAppointment.id);
-
-      if (error) throw error;
+      await appointmentsApi.update(cancelingAppointment.id, { status: 'cancelled' });
 
       // Send cancellation email to user
       await emailService.sendCancellationEmail({
@@ -143,33 +140,6 @@ export default function ProfessionalDashboard() {
         reason: cancelReason || 'Cancelado pelo profissional',
         cancelledBy: 'professional'
       });
-
-      // Get all admins and send notification
-      const { data: adminRoles } = await supabase
-        .from('user_roles')
-        .select('user_id')
-        .eq('role', 'admin');
-
-      if (adminRoles) {
-        const adminIds = adminRoles.map(r => r.user_id);
-        const { data: adminProfiles } = await supabase
-          .from('profiles')
-          .select('email, name')
-          .in('user_id', adminIds);
-
-        // Send email to each admin
-        for (const admin of adminProfiles || []) {
-          await emailService.sendCancellationEmail({
-            userEmail: admin.email,
-            userName: admin.name,
-            appointmentDate: cancelingAppointment.appointment_date,
-            appointmentTime: cancelingAppointment.appointment_time,
-            specialty: cancelingAppointment.specialty_name,
-            reason: `Cancelado pelo profissional ${professional.name}. Motivo: ${cancelReason || 'Não informado'}`,
-            cancelledBy: 'professional'
-          });
-        }
-      }
 
       toast({ title: 'Sucesso', description: 'Agendamento cancelado e notificações enviadas.' });
       setShowCancelDialog(false);
@@ -187,18 +157,13 @@ export default function ProfessionalDashboard() {
     navigate('/auth');
   };
 
-  const handleConfirmAttendance = async (appointmentId: string) => {
+  const handleConfirmAttendance = async (appointmentId: number) => {
     try {
-      const { error } = await supabase
-        .from('appointments')
-        .update({ 
-          professional_confirmed: true,
-          professional_confirmed_at: new Date().toISOString(),
-          status: 'completed'
-        })
-        .eq('id', appointmentId);
-
-      if (error) throw error;
+      await appointmentsApi.update(appointmentId, { 
+        professional_confirmed: true,
+        professional_confirmed_at: new Date().toISOString(),
+        status: 'completed'
+      });
 
       toast({ title: 'Sucesso', description: 'Presença confirmada. Aguardando confirmação do colaborador.' });
       if (professional) fetchAppointments(professional.id);
@@ -208,14 +173,9 @@ export default function ProfessionalDashboard() {
     }
   };
 
-  const handleMarkNoShow = async (appointmentId: string) => {
+  const handleMarkNoShow = async (appointmentId: number) => {
     try {
-      const { error } = await supabase
-        .from('appointments')
-        .update({ status: 'no_show' })
-        .eq('id', appointmentId);
-
-      if (error) throw error;
+      await appointmentsApi.update(appointmentId, { status: 'no_show' });
 
       toast({ title: 'Registrado', description: 'Falta registrada com sucesso.' });
       if (professional) fetchAppointments(professional.id);
@@ -263,34 +223,32 @@ export default function ProfessionalDashboard() {
 
   return (
     <div className="min-h-screen bg-background">
-  {/* Header */}
-  <header className="border-b bg-card/50 backdrop-blur-sm sticky top-0 z-50">
-    <div className="container mx-auto px-4 py-4 flex justify-between items-center">
-      {/* Grupo: ícone + texto */}
-      <div className="flex items-center gap-3">
-        <div className="w-10 h-10 rounded-xl bg-secondary flex items-center justify-center">
-          <img 
-            src="/anadem-icon.png" 
-            alt="Anadem" 
-            className="h-8 w-8"
-          />
-        </div>
-        <div>
-          <h1 className="text-xl font-bold text-foreground">Painel do Profissional</h1>
-          <p className="text-sm text-muted-foreground">Olá, {professional.name}</p>
-        </div>
-      </div>
+      {/* Header */}
+      <header className="border-b bg-card/50 backdrop-blur-sm sticky top-0 z-50">
+        <div className="container mx-auto px-4 py-4 flex justify-between items-center">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-xl bg-secondary flex items-center justify-center">
+              <img 
+                src="/anadem-icon.png" 
+                alt="Anadem" 
+                className="h-8 w-8"
+              />
+            </div>
+            <div>
+              <h1 className="text-xl font-bold text-foreground">Painel do Profissional</h1>
+              <p className="text-sm text-muted-foreground">Olá, {professional.name}</p>
+            </div>
+          </div>
 
-      {/* Botão de sair */}
-      <div className="flex items-center gap-2">
-        <ConditionalThemeToggle />
-        <Button variant="outline" onClick={handleSignOut}>
-          <LogOut className="h-4 w-4 mr-2" />
-          Sair
-        </Button>
-      </div>
-    </div>
-  </header>
+          <div className="flex items-center gap-2">
+            <ConditionalThemeToggle />
+            <Button variant="outline" onClick={handleSignOut}>
+              <LogOut className="h-4 w-4 mr-2" />
+              Sair
+            </Button>
+          </div>
+        </div>
+      </header>
 
       <main className="container mx-auto px-4 py-8">
         <Tabs defaultValue="calendar" className="space-y-6">
@@ -442,31 +400,28 @@ export default function ProfessionalDashboard() {
                     {appointments.map(apt => {
                       const isPast = isAppointmentPast(apt);
                       const needsConfirmation = isPast && apt.status === 'scheduled';
-                      const awaitingUserConfirmation = apt.professional_confirmed && !apt.user_confirmed;
                       
                       return (
                         <TableRow key={apt.id}>
-                          <TableCell>{format(parseISO(apt.appointment_date), 'dd/MM/yyyy')}</TableCell>
+                          <TableCell>
+                            {format(parseISO(apt.appointment_date), "dd/MM/yyyy")}
+                          </TableCell>
                           <TableCell>{apt.appointment_time.substring(0, 5)}</TableCell>
-                          <TableCell className="font-medium">{apt.user_name}</TableCell>
+                          <TableCell>{apt.user_name}</TableCell>
                           <TableCell>{apt.specialty_name}</TableCell>
                           <TableCell>
                             {apt.status === 'completed' && apt.professional_confirmed && apt.user_confirmed ? (
-                              <span className="px-2 py-1 rounded-full text-xs font-medium bg-success/10 text-success">
-                                Assinado
+                              <span className="text-success flex items-center gap-1">
+                                <CheckCircle className="h-4 w-4" /> Assinado
                               </span>
                             ) : apt.status === 'completed' && apt.professional_confirmed ? (
-                              <span className="px-2 py-1 rounded-full text-xs font-medium bg-warning/10 text-warning">
-                                Aguardando assinatura
+                              <span className="text-warning flex items-center gap-1">
+                                <Clock className="h-4 w-4" /> Aguardando assinatura
                               </span>
+                            ) : needsConfirmation ? (
+                              <span className="text-warning">Confirmar presença</span>
                             ) : (
-                              <span className={`px-2 py-1 rounded-full text-xs font-medium ${
-                                apt.status === 'completed' 
-                                  ? 'bg-success/10 text-success' 
-                                  : 'bg-primary/10 text-primary'
-                              }`}>
-                                {apt.status === 'completed' ? 'Concluído' : 'Agendado'}
-                              </span>
+                              <span className="text-primary">Agendado</span>
                             )}
                           </TableCell>
                           <TableCell className="text-right">
@@ -477,28 +432,25 @@ export default function ProfessionalDashboard() {
                                   size="sm"
                                   onClick={() => handleConfirmAttendance(apt.id)}
                                 >
-                                  <UserCheck className="h-4 w-4 mr-1" />
-                                  Compareceu
+                                  <UserCheck className="h-4 w-4" />
                                 </Button>
                                 <Button 
                                   variant="outline" 
                                   size="sm"
-                                  className="text-destructive hover:text-destructive"
+                                  className="text-destructive"
                                   onClick={() => handleMarkNoShow(apt.id)}
                                 >
-                                  <UserX className="h-4 w-4 mr-1" />
-                                  Faltou
+                                  <UserX className="h-4 w-4" />
                                 </Button>
                               </div>
-                            ) : apt.status === 'scheduled' ? (
+                            ) : apt.status === 'scheduled' && !isPast ? (
                               <Button 
                                 variant="ghost" 
                                 size="sm"
-                                className="text-destructive hover:text-destructive"
+                                className="text-destructive"
                                 onClick={() => handleOpenCancelDialog(apt)}
                               >
-                                <XCircle className="h-4 w-4 mr-1" />
-                                Cancelar
+                                <XCircle className="h-4 w-4" />
                               </Button>
                             ) : null}
                           </TableCell>
@@ -519,35 +471,29 @@ export default function ProfessionalDashboard() {
           <DialogHeader>
             <DialogTitle>Cancelar Agendamento</DialogTitle>
             <DialogDescription>
-              Ao cancelar, o colaborador {cancelingAppointment?.user_name} e todos os administradores serão notificados por e-mail.
+              Você está prestes a cancelar o agendamento de {cancelingAppointment?.user_name}.
             </DialogDescription>
           </DialogHeader>
-          <div className="space-y-4 py-4">
-            <div className="bg-muted p-4 rounded-lg">
-              <p className="text-sm">
-                <strong>Data:</strong> {cancelingAppointment && format(parseISO(cancelingAppointment.appointment_date), 'dd/MM/yyyy')}
-              </p>
-              <p className="text-sm">
-                <strong>Horário:</strong> {cancelingAppointment?.appointment_time.substring(0, 5)}
-              </p>
-              <p className="text-sm">
-                <strong>Colaborador:</strong> {cancelingAppointment?.user_name}
-              </p>
-            </div>
-            <div className="space-y-2">
-              <label className="text-sm font-medium">Motivo do cancelamento <span className="text-destructive">*</span></label>
-              <Textarea
-                placeholder="Informe o motivo do cancelamento..."
+          <div className="space-y-4">
+            <div>
+              <label className="text-sm font-medium">Motivo do cancelamento:</label>
+              <Textarea 
                 value={cancelReason}
                 onChange={(e) => setCancelReason(e.target.value)}
-                rows={3}
-                required
+                placeholder="Informe o motivo do cancelamento..."
+                className="mt-2"
               />
             </div>
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setShowCancelDialog(false)}>Voltar</Button>
-            <Button variant="destructive" onClick={handleCancelAppointment} disabled={canceling || !cancelReason.trim()}>
+            <Button variant="outline" onClick={() => setShowCancelDialog(false)}>
+              Voltar
+            </Button>
+            <Button 
+              variant="destructive" 
+              onClick={handleCancelAppointment}
+              disabled={canceling}
+            >
               {canceling ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Confirmar Cancelamento'}
             </Button>
           </DialogFooter>

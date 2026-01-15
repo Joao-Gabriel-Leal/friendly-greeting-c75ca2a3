@@ -12,11 +12,11 @@ export default function AdminMyBooking() {
   const { profile } = useAuth();
   const [step, setStep] = useState<Step>('home');
   const [selectedSpecialty, setSelectedSpecialty] = useState<string | null>(null);
-  const [selectedSpecialtyId, setSelectedSpecialtyId] = useState<string | null>(null);
-  const [selectedProfessional, setSelectedProfessional] = useState<string | null>(null);
+  const [selectedSpecialtyId, setSelectedSpecialtyId] = useState<number | null>(null);
+  const [selectedProfessional, setSelectedProfessional] = useState<number | null>(null);
   const [selectedProfessionalName, setSelectedProfessionalName] = useState<string | null>(null);
 
-  const handleSpecialtySelect = (specialty: string, specialtyId: string, professionalId: string, professionalName: string) => {
+  const handleSpecialtySelect = (specialty: string, specialtyId: number, professionalId: number, professionalName: string) => {
     setSelectedSpecialty(specialty);
     setSelectedSpecialtyId(specialtyId);
     setSelectedProfessional(professionalId);
