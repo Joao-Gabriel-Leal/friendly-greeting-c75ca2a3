@@ -364,10 +364,10 @@ ON CONFLICT (user_id) DO NOTHING;
 -- DADOS INICIAIS: Configurações do Sistema
 -- =====================================================
 INSERT INTO system_settings (id, key, value) VALUES
-    ('gggg1111-1111-1111-1111-111111111111', 'theme', '"system"'),
-    ('gggg2222-2222-2222-2222-222222222222', 'appointment_reminder_hours', '24'),
-    ('gggg3333-3333-3333-3333-333333333333', 'max_appointments_per_day', '10'),
-    ('gggg4444-4444-4444-4444-444444444444', 'allow_same_day_booking', 'true')
+    ('a0001111-1111-1111-1111-111111111111', 'theme', '"system"'),
+    ('a0002222-2222-2222-2222-222222222222', 'appointment_reminder_hours', '24'),
+    ('a0003333-3333-3333-3333-333333333333', 'max_appointments_per_day', '10'),
+    ('a0004444-4444-4444-4444-444444444444', 'allow_same_day_booking', 'true')
 ON CONFLICT (key) DO NOTHING;
 
 -- =====================================================
