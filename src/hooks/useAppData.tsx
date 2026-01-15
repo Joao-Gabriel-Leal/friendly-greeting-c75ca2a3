@@ -42,10 +42,12 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
   const [loading, setLoading] = useState(true);
   const [lastFetch, setLastFetch] = useState<number>(0);
 
-  const fetchData = async (force = false) => {
-    // Cache de 5 minutos
+  const fetchData = useCallback(async (force = false) => {
+    // Cache de 5 minutos - mas apenas se já temos dados
     const now = Date.now();
-    if (!force && lastFetch > 0 && now - lastFetch < 5 * 60 * 1000) {
+    const hasData = professionals.length > 0 && specialties.length > 0;
+    
+    if (!force && hasData && lastFetch > 0 && now - lastFetch < 5 * 60 * 1000) {
       return;
     }
 
@@ -85,7 +87,7 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
     } finally {
       setLoading(false);
     }
-  };
+  }, [professionals.length, specialties.length, lastFetch]);
 
   useEffect(() => {
     fetchData();

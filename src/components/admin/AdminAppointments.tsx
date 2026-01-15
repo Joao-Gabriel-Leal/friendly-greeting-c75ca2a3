@@ -3,13 +3,16 @@ import { supabase } from '@/integrations/supabase/client';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Card, CardContent } from '@/components/ui/card';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Loader2, Plus, Edit, Trash2, CheckCircle, Search, Clock, XCircle, AlertTriangle, ArrowUpDown, ArrowUp, ArrowDown } from 'lucide-react';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Calendar } from '@/components/ui/calendar';
+import { Loader2, Plus, Edit, Trash2, CheckCircle, Search, Clock, XCircle, AlertTriangle, ArrowUpDown, ArrowUp, ArrowDown, CalendarDays, List, Users } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
-import { format, parseISO } from 'date-fns';
+import { format, parseISO, isSameDay } from 'date-fns';
+import { ptBR } from 'date-fns/locale';
 
 interface Appointment {
   id: string;
@@ -43,6 +46,7 @@ interface Specialty {
 }
 
 type SortDirection = 'asc' | 'desc' | null;
+type ViewMode = 'list' | 'calendar' | 'by-professional';
 
 const timeSlots = ['09:00', '10:00', '11:00', '12:00', '13:00', '14:00', '15:00', '16:00'];
 
@@ -58,6 +62,8 @@ export default function AdminAppointments() {
   const [dateSort, setDateSort] = useState<SortDirection>('desc');
   const [showDialog, setShowDialog] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
+  const [viewMode, setViewMode] = useState<ViewMode>('list');
+  const [selectedCalendarDate, setSelectedCalendarDate] = useState<Date | undefined>(new Date());
   const [formData, setFormData] = useState({
     user_id: '',
     professional_id: '',
@@ -195,25 +201,145 @@ export default function AdminAppointments() {
     }
   };
 
-  const filteredAppointments = appointments
-    .filter(apt => {
-      const matchesSearch = 
-        apt.user_name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        apt.user_email?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        apt.professional_name?.toLowerCase().includes(searchTerm.toLowerCase());
-      const matchesStatus = statusFilter === 'all' || apt.status === statusFilter;
-      return matchesSearch && matchesStatus;
-    })
-    .sort((a, b) => {
-      if (!dateSort) return 0;
-      
-      const dateTimeA = new Date(`${a.appointment_date}T${a.appointment_time}`);
-      const dateTimeB = new Date(`${b.appointment_date}T${b.appointment_time}`);
-      
-      return dateSort === 'asc' 
-        ? dateTimeA.getTime() - dateTimeB.getTime()
-        : dateTimeB.getTime() - dateTimeA.getTime();
-    });
+  const getFilteredAppointments = (professionalId?: string) => {
+    return appointments
+      .filter(apt => {
+        const matchesSearch = 
+          apt.user_name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+          apt.user_email?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+          apt.professional_name?.toLowerCase().includes(searchTerm.toLowerCase());
+        const matchesStatus = statusFilter === 'all' || apt.status === statusFilter;
+        const matchesProfessional = !professionalId || apt.professional_id === professionalId;
+        return matchesSearch && matchesStatus && matchesProfessional;
+      })
+      .sort((a, b) => {
+        if (!dateSort) return 0;
+        
+        const dateTimeA = new Date(`${a.appointment_date}T${a.appointment_time}`);
+        const dateTimeB = new Date(`${b.appointment_date}T${b.appointment_time}`);
+        
+        return dateSort === 'asc' 
+          ? dateTimeA.getTime() - dateTimeB.getTime()
+          : dateTimeB.getTime() - dateTimeA.getTime();
+      });
+  };
+
+  const getCalendarAppointments = () => {
+    if (!selectedCalendarDate) return [];
+    return appointments.filter(apt => 
+      isSameDay(parseISO(apt.appointment_date), selectedCalendarDate)
+    ).sort((a, b) => a.appointment_time.localeCompare(b.appointment_time));
+  };
+
+  const getAppointmentDates = () => {
+    return appointments.map(apt => parseISO(apt.appointment_date));
+  };
+
+  const getStatusBadge = (status: string) => {
+    const styles: Record<string, string> = {
+      scheduled: 'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-400',
+      completed: 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400',
+      cancelled: 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400',
+      no_show: 'bg-orange-100 text-orange-800 dark:bg-orange-900/30 dark:text-orange-400',
+    };
+    const labels: Record<string, string> = {
+      scheduled: 'Agendado',
+      completed: 'Concluído',
+      cancelled: 'Cancelado',
+      no_show: 'Falta',
+    };
+    return (
+      <span className={`px-2 py-1 rounded-full text-xs font-medium ${styles[status] || ''}`}>
+        {labels[status] || status}
+      </span>
+    );
+  };
+
+  const renderAppointmentTable = (appointmentsList: Appointment[], showProfessional = true) => (
+    <Table>
+      <TableHeader>
+        <TableRow>
+          <TableHead>
+            <Button 
+              variant="ghost" 
+              size="sm" 
+              className="flex items-center gap-1 -ml-2 font-medium"
+              onClick={toggleDateSort}
+            >
+              Data/Hora
+              {dateSort === 'asc' ? (
+                <ArrowUp className="h-4 w-4" />
+              ) : dateSort === 'desc' ? (
+                <ArrowDown className="h-4 w-4" />
+              ) : (
+                <ArrowUpDown className="h-4 w-4 text-muted-foreground" />
+              )}
+            </Button>
+          </TableHead>
+          <TableHead>Usuário</TableHead>
+          {showProfessional && <TableHead>Profissional</TableHead>}
+          <TableHead>Especialidade</TableHead>
+          <TableHead>Status</TableHead>
+          <TableHead className="text-right">Ações</TableHead>
+        </TableRow>
+      </TableHeader>
+      <TableBody>
+        {appointmentsList.length === 0 ? (
+          <TableRow>
+            <TableCell colSpan={showProfessional ? 6 : 5} className="text-center py-8 text-muted-foreground">
+              Nenhum agendamento encontrado
+            </TableCell>
+          </TableRow>
+        ) : (
+          appointmentsList.map(apt => (
+            <TableRow key={apt.id}>
+              <TableCell>
+                <div className="font-medium">{format(parseISO(apt.appointment_date), 'dd/MM/yyyy')}</div>
+                <div className="text-sm text-muted-foreground">{apt.appointment_time.substring(0, 5)}</div>
+              </TableCell>
+              <TableCell>
+                <div className="font-medium">{apt.user_name}</div>
+                <div className="text-sm text-muted-foreground">{apt.user_email}</div>
+              </TableCell>
+              {showProfessional && <TableCell>{apt.professional_name}</TableCell>}
+              <TableCell>{apt.specialty_name}</TableCell>
+              <TableCell>
+                <Select value={apt.status} onValueChange={(newStatus) => handleStatusChange(apt.id, newStatus)}>
+                  <SelectTrigger className="w-36">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="scheduled">
+                      <span className="inline-flex items-center gap-1"><Clock className="h-3 w-3" />Agendado</span>
+                    </SelectItem>
+                    <SelectItem value="completed">
+                      <span className="inline-flex items-center gap-1"><CheckCircle className="h-3 w-3" />Concluído</span>
+                    </SelectItem>
+                    <SelectItem value="cancelled">
+                      <span className="inline-flex items-center gap-1"><XCircle className="h-3 w-3" />Cancelado</span>
+                    </SelectItem>
+                    <SelectItem value="no_show">
+                      <span className="inline-flex items-center gap-1"><AlertTriangle className="h-3 w-3" />Falta</span>
+                    </SelectItem>
+                  </SelectContent>
+                </Select>
+              </TableCell>
+              <TableCell className="text-right">
+                <div className="flex items-center justify-end gap-1">
+                  <Button variant="ghost" size="icon" onClick={() => handleEdit(apt)}>
+                    <Edit className="h-4 w-4" />
+                  </Button>
+                  <Button variant="ghost" size="icon" className="text-destructive" onClick={() => handleDelete(apt.id)}>
+                    <Trash2 className="h-4 w-4" />
+                  </Button>
+                </div>
+              </TableCell>
+            </TableRow>
+          ))
+        )}
+      </TableBody>
+    </Table>
+  );
 
   if (loading) {
     return <div className="flex items-center justify-center py-12"><Loader2 className="h-8 w-8 animate-spin text-primary" /></div>;
@@ -245,85 +371,136 @@ export default function AdminAppointments() {
         </Button>
       </div>
 
-      <Card>
-        <CardContent className="p-0">
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>
-                  <Button 
-                    variant="ghost" 
-                    size="sm" 
-                    className="flex items-center gap-1 -ml-2 font-medium"
-                    onClick={toggleDateSort}
-                  >
-                    Data/Hora
-                    {dateSort === 'asc' ? (
-                      <ArrowUp className="h-4 w-4" />
-                    ) : dateSort === 'desc' ? (
-                      <ArrowDown className="h-4 w-4" />
-                    ) : (
-                      <ArrowUpDown className="h-4 w-4 text-muted-foreground" />
-                    )}
-                  </Button>
-                </TableHead>
-                <TableHead>Usuário</TableHead>
-                <TableHead>Profissional</TableHead>
-                <TableHead>Especialidade</TableHead>
-                <TableHead>Status</TableHead>
-                <TableHead className="text-right">Ações</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {filteredAppointments.map(apt => (
-                <TableRow key={apt.id}>
-                  <TableCell>
-                    <div className="font-medium">{format(parseISO(apt.appointment_date), 'dd/MM/yyyy')}</div>
-                    <div className="text-sm text-muted-foreground">{apt.appointment_time.substring(0, 5)}</div>
-                  </TableCell>
-                  <TableCell>
-                    <div className="font-medium">{apt.user_name}</div>
-                    <div className="text-sm text-muted-foreground">{apt.user_email}</div>
-                  </TableCell>
-                  <TableCell>{apt.professional_name}</TableCell>
-                  <TableCell>{apt.specialty_name}</TableCell>
-                  <TableCell>
-                    <Select value={apt.status} onValueChange={(newStatus) => handleStatusChange(apt.id, newStatus)}>
-                      <SelectTrigger className="w-36">
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="scheduled">
-                          <span className="inline-flex items-center gap-1"><Clock className="h-3 w-3" />Agendado</span>
-                        </SelectItem>
-                        <SelectItem value="completed">
-                          <span className="inline-flex items-center gap-1"><CheckCircle className="h-3 w-3" />Concluído</span>
-                        </SelectItem>
-                        <SelectItem value="cancelled">
-                          <span className="inline-flex items-center gap-1"><XCircle className="h-3 w-3" />Cancelado</span>
-                        </SelectItem>
-                        <SelectItem value="no_show">
-                          <span className="inline-flex items-center gap-1"><AlertTriangle className="h-3 w-3" />Falta</span>
-                        </SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </TableCell>
-                  <TableCell className="text-right">
-                    <div className="flex items-center justify-end gap-1">
-                      <Button variant="ghost" size="icon" onClick={() => handleEdit(apt)}>
-                        <Edit className="h-4 w-4" />
-                      </Button>
-                      <Button variant="ghost" size="icon" className="text-destructive" onClick={() => handleDelete(apt.id)}>
-                        <Trash2 className="h-4 w-4" />
-                      </Button>
-                    </div>
-                  </TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
-        </CardContent>
-      </Card>
+      {/* View Mode Tabs */}
+      <Tabs value={viewMode} onValueChange={(v) => setViewMode(v as ViewMode)}>
+        <TabsList>
+          <TabsTrigger value="list" className="gap-2">
+            <List className="h-4 w-4" />
+            Lista
+          </TabsTrigger>
+          <TabsTrigger value="calendar" className="gap-2">
+            <CalendarDays className="h-4 w-4" />
+            Calendário
+          </TabsTrigger>
+          <TabsTrigger value="by-professional" className="gap-2">
+            <Users className="h-4 w-4" />
+            Por Profissional
+          </TabsTrigger>
+        </TabsList>
+
+        {/* List View */}
+        <TabsContent value="list" className="mt-6">
+          <Card>
+            <CardContent className="p-0">
+              {renderAppointmentTable(getFilteredAppointments())}
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        {/* Calendar View */}
+        <TabsContent value="calendar" className="mt-6">
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-lg">Selecione uma Data</CardTitle>
+              </CardHeader>
+              <CardContent className="flex justify-center">
+                <Calendar
+                  mode="single"
+                  selected={selectedCalendarDate}
+                  onSelect={setSelectedCalendarDate}
+                  locale={ptBR}
+                  className="rounded-md border pointer-events-auto"
+                  modifiers={{
+                    hasAppointment: getAppointmentDates()
+                  }}
+                  modifiersStyles={{
+                    hasAppointment: { 
+                      backgroundColor: 'hsl(var(--primary) / 0.1)',
+                      fontWeight: 'bold'
+                    }
+                  }}
+                />
+              </CardContent>
+            </Card>
+
+            <Card className="lg:col-span-2">
+              <CardHeader>
+                <CardTitle className="text-lg">
+                  Agendamentos - {selectedCalendarDate ? format(selectedCalendarDate, "dd 'de' MMMM 'de' yyyy", { locale: ptBR }) : 'Selecione uma data'}
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                {!selectedCalendarDate ? (
+                  <div className="text-center py-8 text-muted-foreground">
+                    Selecione uma data no calendário
+                  </div>
+                ) : getCalendarAppointments().length === 0 ? (
+                  <div className="text-center py-8 text-muted-foreground">
+                    Nenhum agendamento nesta data
+                  </div>
+                ) : (
+                  <div className="space-y-3">
+                    {getCalendarAppointments().map(apt => (
+                      <div 
+                        key={apt.id} 
+                        className="flex items-center justify-between p-4 rounded-lg border bg-card"
+                      >
+                        <div className="flex items-center gap-4">
+                          <div className="text-2xl font-bold text-primary">
+                            {apt.appointment_time.substring(0, 5)}
+                          </div>
+                          <div>
+                            <div className="font-medium">{apt.user_name}</div>
+                            <div className="text-sm text-muted-foreground">
+                              {apt.specialty_name} - {apt.professional_name}
+                            </div>
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          {getStatusBadge(apt.status)}
+                          <Button variant="ghost" size="icon" onClick={() => handleEdit(apt)}>
+                            <Edit className="h-4 w-4" />
+                          </Button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          </div>
+        </TabsContent>
+
+        {/* By Professional View */}
+        <TabsContent value="by-professional" className="mt-6">
+          <div className="grid grid-cols-1 gap-6">
+            {professionals.map(prof => {
+              const profAppointments = getFilteredAppointments(prof.id);
+              return (
+                <Card key={prof.id}>
+                  <CardHeader className="pb-2">
+                    <CardTitle className="flex items-center justify-between">
+                      <span className="flex items-center gap-2">
+                        <div className="w-8 h-8 rounded-full gradient-primary flex items-center justify-center text-white text-sm font-bold">
+                          {prof.name.charAt(0)}
+                        </div>
+                        {prof.name}
+                      </span>
+                      <span className="text-sm font-normal text-muted-foreground">
+                        {profAppointments.length} agendamento(s)
+                      </span>
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent className="p-0">
+                    {renderAppointmentTable(profAppointments, false)}
+                  </CardContent>
+                </Card>
+              );
+            })}
+          </div>
+        </TabsContent>
+      </Tabs>
 
       <Dialog open={showDialog} onOpenChange={setShowDialog}>
         <DialogContent>
