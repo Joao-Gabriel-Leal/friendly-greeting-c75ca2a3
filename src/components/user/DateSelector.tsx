@@ -1,5 +1,4 @@
 import { useEffect, useState } from 'react';
-import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/lib/auth';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -8,10 +7,11 @@ import { ArrowLeft, Loader2, AlertCircle } from 'lucide-react';
 import { format, addDays, startOfDay, isSameDay, startOfMonth, endOfMonth } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { isBrazilianHoliday } from '@/lib/brazilianHolidays';
+import { availabilityApi, appointmentsApi } from '@/lib/api';
 
 interface DateSelectorProps {
-  professionalId: string;
-  specialtyId: string;
+  professionalId: number;
+  specialtyId: number;
   specialty: string;
   onSelect: (date: Date) => void;
   onBack: () => void;
@@ -23,7 +23,7 @@ export default function DateSelector({ professionalId, specialtyId, specialty, o
   const [availableDays, setAvailableDays] = useState<number[]>([]);
   const [blockedDates, setBlockedDates] = useState<Date[]>([]);
   const [specificAvailableDates, setSpecificAvailableDates] = useState<Date[]>([]);
-  const [existingAppointment, setExistingAppointment] = useState<{ id: string; date: string } | null>(null);
+  const [existingAppointment, setExistingAppointment] = useState<{ id: number; date: string } | null>(null);
   const [selectedDate, setSelectedDate] = useState<Date | undefined>();
 
   useEffect(() => {
@@ -44,22 +44,18 @@ export default function DateSelector({ professionalId, specialtyId, specialty, o
 
     try {
       // Fetch available days of week for the professional
-      const { data: availableData } = await supabase
-        .from('available_days')
-        .select('day_of_week')
-        .eq('professional_id', professionalId);
+      const availableData = await availabilityApi.getAvailableDays(professionalId);
 
       if (availableData) {
         setAvailableDays(availableData.map(d => d.day_of_week));
       }
 
       // Fetch blocked dates (excluding AVAILABLE: entries which are specific available dates)
-      const { data: blockedData } = await supabase
-        .from('blocked_days')
-        .select('blocked_date, reason')
-        .or(`professional_id.eq.${professionalId},professional_id.is.null`)
-        .gte('blocked_date', format(today, 'yyyy-MM-dd'))
-        .lte('blocked_date', format(maxDate, 'yyyy-MM-dd'));
+      const blockedData = await availabilityApi.getBlockedDays(
+        professionalId, 
+        format(today, 'yyyy-MM-dd'),
+        format(maxDate, 'yyyy-MM-dd')
+      );
 
       if (blockedData) {
         // Separate blocked dates from specific available dates
@@ -86,17 +82,14 @@ export default function DateSelector({ professionalId, specialtyId, specialty, o
       const today = new Date();
       const monthStart = startOfMonth(today);
       const monthEnd = endOfMonth(today);
-      const todayStr = format(today, 'yyyy-MM-dd');
 
       // Buscar agendamentos do mês
-      const { data } = await supabase
-        .from('appointments')
-        .select('id, appointment_date, appointment_time, status, professional_confirmed, user_confirmed')
-        .eq('user_id', user.id)
-        .eq('specialty_id', specialtyId)
-        .in('status', ['scheduled', 'completed'])
-        .gte('appointment_date', format(monthStart, 'yyyy-MM-dd'))
-        .lte('appointment_date', format(monthEnd, 'yyyy-MM-dd'));
+      const data = await appointmentsApi.checkExisting(
+        user.id, 
+        specialtyId, 
+        format(monthStart, 'yyyy-MM-dd'),
+        format(monthEnd, 'yyyy-MM-dd')
+      );
 
       if (data && data.length > 0) {
         // Verificar se existe agendamento que realmente bloqueia novo agendamento:

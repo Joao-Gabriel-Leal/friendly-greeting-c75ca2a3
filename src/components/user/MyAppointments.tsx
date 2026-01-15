@@ -1,5 +1,4 @@
 import { useEffect, useState } from 'react';
-import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/lib/auth';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
@@ -17,10 +16,11 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
+import { appointmentsApi, specialtiesApi, professionalsApi, specialtyBlocksApi } from '@/lib/api';
 
 interface Appointment {
-  id: string;
-  specialty_id: string;
+  id: number;
+  specialty_id: number;
   specialty_name: string;
   appointment_date: string;
   appointment_time: string;
@@ -39,7 +39,7 @@ export default function MyAppointments({ onBack }: MyAppointmentsProps) {
   const { toast } = useToast();
   const [loading, setLoading] = useState(true);
   const [appointments, setAppointments] = useState<Appointment[]>([]);
-  const [cancellingId, setCancellingId] = useState<string | null>(null);
+  const [cancellingId, setCancellingId] = useState<number | null>(null);
   const [showWarning, setShowWarning] = useState(false);
 
   useEffect(() => {
@@ -53,13 +53,9 @@ export default function MyAppointments({ onBack }: MyAppointmentsProps) {
     }
 
     try {
-      const { data: appointmentsData } = await supabase
-        .from('appointments')
-        .select('id, specialty_id, appointment_date, appointment_time, status, professional_id, professional_confirmed, user_confirmed')
-        .eq('user_id', user.id)
-        .order('appointment_date', { ascending: false });
+      const appointmentsData = await appointmentsApi.getByUser(user.id);
 
-      if (!appointmentsData) {
+      if (!appointmentsData || appointmentsData.length === 0) {
         setAppointments([]);
         setLoading(false);
         return;
@@ -68,13 +64,13 @@ export default function MyAppointments({ onBack }: MyAppointmentsProps) {
       const specialtyIds = [...new Set(appointmentsData.map(a => a.specialty_id).filter(Boolean))];
       const professionalIds = [...new Set(appointmentsData.map(a => a.professional_id).filter(Boolean))];
 
-      const [specialtiesRes, professionalsRes] = await Promise.all([
-        supabase.from('specialties').select('id, name').in('id', specialtyIds),
-        supabase.from('professionals').select('id, name').in('id', professionalIds)
+      const [allSpecialties, allProfessionals] = await Promise.all([
+        specialtiesApi.getAll(),
+        professionalsApi.getAll()
       ]);
 
-      const specialtiesMap = new Map(specialtiesRes.data?.map(s => [s.id, s.name]) || []);
-      const professionalsMap = new Map(professionalsRes.data?.map(p => [p.id, p.name]) || []);
+      const specialtiesMap = new Map(allSpecialties.filter(s => specialtyIds.includes(s.id)).map(s => [s.id, s.name]));
+      const professionalsMap = new Map(allProfessionals.filter(p => professionalIds.includes(p.id)).map(p => [p.id, p.name]));
 
       const enrichedAppointments = appointmentsData.map(apt => ({
         ...apt,
@@ -92,17 +88,12 @@ export default function MyAppointments({ onBack }: MyAppointmentsProps) {
     }
   };
 
-  const handleConfirmAttendance = async (appointmentId: string) => {
+  const handleConfirmAttendance = async (appointmentId: number) => {
     try {
-      const { error } = await supabase
-        .from('appointments')
-        .update({ 
-          user_confirmed: true,
-          user_confirmed_at: new Date().toISOString()
-        })
-        .eq('id', appointmentId);
-
-      if (error) throw error;
+      await appointmentsApi.update(appointmentId, { 
+        user_confirmed: true,
+        user_confirmed_at: new Date().toISOString()
+      });
 
       toast({ title: 'Sucesso', description: 'Presença confirmada com sucesso!' });
       fetchAppointments();
@@ -114,7 +105,7 @@ export default function MyAppointments({ onBack }: MyAppointmentsProps) {
 
   const [showConfirmCancel, setShowConfirmCancel] = useState(false);
 
-  const handleCancelClick = (id: string, date: string) => {
+  const handleCancelClick = (id: number, date: string) => {
     const appointmentDate = parseISO(date);
     const isToday = isSameDay(appointmentDate, new Date());
 
@@ -127,7 +118,7 @@ export default function MyAppointments({ onBack }: MyAppointmentsProps) {
     }
   };
 
-  const cancelAppointment = async (id: string, withSuspension: boolean) => {
+  const cancelAppointment = async (id: number, withSuspension: boolean) => {
     const appointment = appointments.find(a => a.id === id);
     
     if (!appointment) {
@@ -140,29 +131,22 @@ export default function MyAppointments({ onBack }: MyAppointmentsProps) {
     }
 
     try {
-      const { error } = await supabase
-        .from('appointments')
-        .update({ 
-          status: 'cancelled',
-          notes: withSuspension ? 'Cancelado no dia' : 'Cancelado pelo usuário'
-        })
-        .eq('id', id);
-
-      if (error) throw error;
+      await appointmentsApi.update(id, { 
+        status: 'cancelled',
+        notes: withSuspension ? 'Cancelado no dia' : 'Cancelado pelo usuário'
+      });
 
       // Apply specialty-specific suspension if cancelled same day
       if (withSuspension && user && appointment.specialty_id) {
         const blockedUntil = new Date();
         blockedUntil.setDate(blockedUntil.getDate() + 60);
         
-        await supabase
-          .from('user_specialty_blocks')
-          .insert({
-            user_id: user.id,
-            specialty_id: appointment.specialty_id,
-            blocked_until: blockedUntil.toISOString(),
-            reason: 'Cancelamento no dia do agendamento'
-          });
+        await specialtyBlocksApi.create({
+          user_id: user.id,
+          specialty_id: appointment.specialty_id,
+          blocked_until: blockedUntil.toISOString(),
+          reason: 'Cancelamento no dia do agendamento'
+        });
       }
 
       setCancellingId(null);
@@ -447,18 +431,32 @@ export default function MyAppointments({ onBack }: MyAppointmentsProps) {
       {pastAppointments.length > 0 && (
         <div>
           <h3 className="text-lg font-semibold text-foreground mb-4">Histórico</h3>
-          <div className="space-y-3">
+          <div className="space-y-4">
             {pastAppointments.map(appointment => (
-              <Card key={appointment.id} className="bg-muted/30">
-                <CardContent className="p-4">
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <h4 className="font-medium text-foreground">{appointment.specialty_name}</h4>
-                      <p className="text-sm text-muted-foreground">
-                        {format(parseISO(appointment.appointment_date), "dd/MM/yyyy", { locale: ptBR })} às {appointment.appointment_time.substring(0, 5)}
-                      </p>
+              <Card key={appointment.id} className="overflow-hidden opacity-75">
+                <CardContent className="p-0">
+                  <div className="flex items-stretch">
+                    <div className="w-20 bg-muted flex flex-col items-center justify-center text-muted-foreground p-4">
+                      <span className="text-2xl font-bold">
+                        {format(parseISO(appointment.appointment_date), 'dd')}
+                      </span>
+                      <span className="text-xs uppercase">
+                        {format(parseISO(appointment.appointment_date), 'MMM', { locale: ptBR })}
+                      </span>
                     </div>
-                    {getStatusBadge(appointment)}
+                    <div className="flex-1 p-4">
+                      <div className="flex items-start justify-between">
+                        <div>
+                          <h4 className="font-semibold text-foreground">{appointment.specialty_name}</h4>
+                          <p className="text-sm text-muted-foreground">{appointment.professional_name}</p>
+                          <p className="text-sm text-muted-foreground mt-1">
+                            <Clock className="h-3 w-3 inline mr-1" />
+                            {appointment.appointment_time.substring(0, 5)}
+                          </p>
+                        </div>
+                        {getStatusBadge(appointment)}
+                      </div>
+                    </div>
                   </div>
                 </CardContent>
               </Card>
@@ -468,15 +466,15 @@ export default function MyAppointments({ onBack }: MyAppointmentsProps) {
       )}
 
       {appointments.length === 0 && (
-        <Card>
-          <CardContent className="py-12 text-center">
+        <Card className="text-center py-12">
+          <CardContent>
             <Calendar className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
             <p className="text-muted-foreground">Você ainda não possui agendamentos.</p>
           </CardContent>
         </Card>
       )}
 
-      {/* Confirmação para cancelamento no dia (com suspensão) */}
+      {/* Warning Dialog for same-day cancellation */}
       <AlertDialog open={showWarning} onOpenChange={setShowWarning}>
         <AlertDialogContent>
           <AlertDialogHeader>
@@ -485,43 +483,51 @@ export default function MyAppointments({ onBack }: MyAppointmentsProps) {
               Atenção!
             </AlertDialogTitle>
             <AlertDialogDescription>
-              Cancelar no dia da consulta resultará em <strong>suspensão de 60 dias nesta especialidade</strong>.
-              Você ainda poderá agendar em outras especialidades. Tem certeza que deseja continuar?
+              Cancelar um agendamento no mesmo dia resultará em suspensão de 60 dias 
+              para esta especialidade. Tem certeza que deseja continuar?
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel>Não, manter agendamento</AlertDialogCancel>
+            <AlertDialogCancel onClick={() => {
+              setShowWarning(false);
+              setCancellingId(null);
+            }}>
+              Voltar
+            </AlertDialogCancel>
             <AlertDialogAction
               className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
               onClick={() => cancellingId && cancelAppointment(cancellingId, true)}
             >
-              Sim, cancelar mesmo assim
+              Cancelar mesmo assim
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
 
-      {/* Confirmação simples para cancelamento normal */}
+      {/* Regular cancellation confirmation */}
       <AlertDialog open={showConfirmCancel} onOpenChange={setShowConfirmCancel}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Confirmar Cancelamento</AlertDialogTitle>
+            <AlertDialogTitle>Confirmar cancelamento</AlertDialogTitle>
             <AlertDialogDescription>
               Tem certeza que deseja cancelar este agendamento?
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel onClick={() => setCancellingId(null)}>Não, manter</AlertDialogCancel>
+            <AlertDialogCancel onClick={() => {
+              setShowConfirmCancel(false);
+              setCancellingId(null);
+            }}>
+              Voltar
+            </AlertDialogCancel>
             <AlertDialogAction
               className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
               onClick={() => {
-                if (cancellingId) {
-                  cancelAppointment(cancellingId, false);
-                  setShowConfirmCancel(false);
-                }
+                if (cancellingId) cancelAppointment(cancellingId, false);
+                setShowConfirmCancel(false);
               }}
             >
-              Sim, cancelar
+              Confirmar cancelamento
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

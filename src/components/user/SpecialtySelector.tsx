@@ -1,21 +1,21 @@
 import { useEffect, useState } from 'react';
-import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/lib/auth';
 import { useAppData } from '@/hooks/useAppData';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { ArrowLeft, Loader2, Ban } from 'lucide-react';
 import { getSpecialtyIcon, getSpecialtyColor } from '@/lib/specialtyIcons';
+import { specialtyBlocksApi } from '@/lib/api';
 
 interface SpecialtyWithProfessionals {
-  id: string;
+  id: number;
   name: string;
-  professionals: { id: string; name: string }[];
+  professionals: { id: number; name: string }[];
   isBlocked?: boolean;
 }
 
 interface SpecialtySelectorProps {
-  onSelect: (specialty: string, specialtyId: string, professionalId: string, professionalName: string) => void;
+  onSelect: (specialty: string, specialtyId: number, professionalId: number, professionalName: string) => void;
   onBack: () => void;
 }
 
@@ -23,7 +23,7 @@ export default function SpecialtySelector({ onSelect, onBack }: SpecialtySelecto
   const { user } = useAuth();
   const { specialties, getSpecialtyProfessionals, loading: dataLoading, refresh } = useAppData();
   const [specialtiesWithProfs, setSpecialtiesWithProfs] = useState<SpecialtyWithProfessionals[]>([]);
-  const [blockedSpecialtyIds, setBlockedSpecialtyIds] = useState<string[]>([]);
+  const [blockedSpecialtyIds, setBlockedSpecialtyIds] = useState<number[]>([]);
   const [loading, setLoading] = useState(true);
 
   // Fetch data immediately on mount
@@ -53,11 +53,7 @@ export default function SpecialtySelector({ onSelect, onBack }: SpecialtySelecto
     }
 
     try {
-      const { data: blocks } = await supabase
-        .from('user_specialty_blocks')
-        .select('specialty_id, blocked_until')
-        .eq('user_id', user.id);
-
+      const blocks = await specialtyBlocksApi.getByUser(user.id);
       const blocked = (blocks || [])
         .filter(b => !b.blocked_until || new Date(b.blocked_until) > new Date())
         .map(b => b.specialty_id);

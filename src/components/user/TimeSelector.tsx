@@ -1,5 +1,4 @@
 import { useEffect, useState, useMemo } from 'react';
-import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/lib/auth';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -7,11 +6,12 @@ import { ArrowLeft, Loader2, Clock, CheckCircle } from 'lucide-react';
 import { format, isToday } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { useToast } from '@/hooks/use-toast';
+import { availabilityApi, appointmentsApi } from '@/lib/api';
 
 interface TimeSelectorProps {
-  professionalId: string;
+  professionalId: number;
   professionalName: string;
-  specialtyId: string;
+  specialtyId: number;
   specialty: string;
   date: Date;
   onComplete: () => void;
@@ -52,21 +52,16 @@ export default function TimeSelector({ professionalId, professionalName, special
 
       // Buscar disponibilidade e slots ocupados em paralelo
       const [availabilityResult, bookedResult] = await Promise.all([
-        supabase
-          .from('blocked_days')
-          .select('reason')
-          .eq('professional_id', professionalId)
-          .eq('blocked_date', dateStr)
-          .like('reason', 'AVAILABLE:%'),
-        supabase.functions.invoke('get-booked-slots', {
-          body: { professionalId, date: dateStr },
-        })
+        availabilityApi.getBlockedDays(professionalId, dateStr, dateStr),
+        availabilityApi.getBookedSlots(professionalId, dateStr)
       ]);
 
       // Processar disponibilidade
       let timeSlots: string[] = [];
-      if (availabilityResult.data && availabilityResult.data.length > 0) {
-        availabilityResult.data.forEach(entry => {
+      const availableEntries = availabilityResult.filter(entry => entry.reason?.startsWith('AVAILABLE:'));
+      
+      if (availableEntries.length > 0) {
+        availableEntries.forEach(entry => {
           if (entry.reason) {
             const match = entry.reason.match(/AVAILABLE:\s*(\d{2}:\d{2})\s*-\s*(\d{2}:\d{2})/);
             if (match) {
@@ -83,8 +78,8 @@ export default function TimeSelector({ professionalId, professionalName, special
       setAvailableTimeSlots(timeSlots);
 
       // Processar slots ocupados
-      if (bookedResult.data?.bookedSlots) {
-        setBookedSlots(bookedResult.data.bookedSlots);
+      if (bookedResult?.bookedSlots) {
+        setBookedSlots(bookedResult.bookedSlots);
       } else {
         setBookedSlots([]);
       }
@@ -102,15 +97,13 @@ export default function TimeSelector({ professionalId, professionalName, special
     setBooking(true);
 
     try {
-      const { error } = await supabase.from('appointments').insert({
+      await appointmentsApi.create({
         user_id: user.id,
         professional_id: professionalId,
         specialty_id: specialtyId,
         appointment_date: dateStr,
         appointment_time: selectedTime + ':00',
       });
-
-      if (error) throw error;
 
       toast({
         title: 'Agendamento confirmado!',
