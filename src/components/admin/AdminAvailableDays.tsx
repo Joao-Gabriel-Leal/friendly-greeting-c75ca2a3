@@ -6,23 +6,16 @@ import { Calendar } from '@/components/ui/calendar';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { Switch } from '@/components/ui/switch';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Loader2, CalendarCheck, Trash2, Clock, CalendarDays } from 'lucide-react';
+import { Loader2, CalendarCheck, Trash2, Clock, CalendarDays, Save, Plus } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
-import { format, parseISO } from 'date-fns';
+import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 
 interface Professional {
   id: string;
   name: string;
-}
-
-interface AvailableDay {
-  id: string;
-  professional_id: string;
-  day_of_week: number;
-  start_time: string;
-  end_time: string;
 }
 
 interface SpecificDate {
@@ -36,7 +29,6 @@ export default function AdminAvailableDays() {
   const [loading, setLoading] = useState(true);
   const [professionals, setProfessionals] = useState<Professional[]>([]);
   const [selectedProfessional, setSelectedProfessional] = useState<string>('');
-  const [availableDays, setAvailableDays] = useState<AvailableDay[]>([]);
   const [selectedDays, setSelectedDays] = useState<{ [key: number]: { enabled: boolean; start: string; end: string } }>({
     0: { enabled: false, start: '09:00', end: '17:00' },
     1: { enabled: false, start: '09:00', end: '17:00' },
@@ -52,8 +44,7 @@ export default function AdminAvailableDays() {
   const [specificEndTime, setSpecificEndTime] = useState('17:00');
   const [saving, setSaving] = useState(false);
 
-  const dayNames = ['Domingo', 'Segunda', 'Terça', 'Quarta', 'Quinta', 'Sexta', 'Sábado'];
-  const dayNamesShort = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'];
+  const dayNames = ['Domingo', 'Segunda-feira', 'Terça-feira', 'Quarta-feira', 'Quinta-feira', 'Sexta-feira', 'Sábado'];
 
   useEffect(() => {
     fetchProfessionals();
@@ -103,7 +94,6 @@ export default function AdminAvailableDays() {
       });
 
       setSelectedDays(daysConfig);
-      setAvailableDays(data);
     } else {
       setSelectedDays({
         0: { enabled: false, start: '09:00', end: '17:00' },
@@ -114,12 +104,10 @@ export default function AdminAvailableDays() {
         5: { enabled: false, start: '09:00', end: '17:00' },
         6: { enabled: false, start: '09:00', end: '17:00' },
       });
-      setAvailableDays([]);
     }
   };
 
   const fetchSpecificDates = async () => {
-    // Fetch from blocked_days with reason starting with "AVAILABLE:" to store specific available dates
     const { data } = await supabase
       .from('blocked_days')
       .select('blocked_date, reason')
@@ -143,13 +131,11 @@ export default function AdminAvailableDays() {
     setSaving(true);
 
     try {
-      // Delete existing available days for this professional
       await supabase
         .from('available_days')
         .delete()
         .eq('professional_id', selectedProfessional);
 
-      // Insert new available days with times
       const inserts = Object.entries(selectedDays)
         .filter(([_, config]) => config.enabled)
         .map(([day, config]) => ({
@@ -166,9 +152,9 @@ export default function AdminAvailableDays() {
 
       const enabledCount = Object.values(selectedDays).filter(d => d.enabled).length;
       toast({ 
-        title: 'Sucesso', 
+        title: 'Sucesso!', 
         description: enabledCount > 0 
-          ? `${enabledCount} dias da semana configurados.` 
+          ? `${enabledCount} dia(s) da semana configurado(s).` 
           : 'Disponibilidade semanal limpa.'
       });
       fetchAvailableDays();
@@ -179,7 +165,6 @@ export default function AdminAvailableDays() {
     setSaving(false);
   };
 
-  // Helper function to check if two time ranges overlap
   const hasTimeOverlap = (start1: string, end1: string, start2: string, end2: string): boolean => {
     const toMinutes = (time: string) => {
       const [h, m] = time.split(':').map(Number);
@@ -190,7 +175,6 @@ export default function AdminAvailableDays() {
     const s2 = toMinutes(start2);
     const e2 = toMinutes(end2);
     
-    // Two ranges overlap if one starts before the other ends and vice versa
     return s1 < e2 && s2 < e1;
   };
 
@@ -202,7 +186,6 @@ export default function AdminAvailableDays() {
 
     const dateStr = format(selectedCalendarDate, 'yyyy-MM-dd');
     
-    // Check for time overlap with existing entries on the same date
     const overlappingEntry = specificDates.find(d => 
       d.date === dateStr && 
       hasTimeOverlap(specificStartTime, specificEndTime, d.start_time, d.end_time)
@@ -218,7 +201,6 @@ export default function AdminAvailableDays() {
     }
 
     try {
-      // Store as blocked_day with special reason format
       const { error } = await supabase.from('blocked_days').insert({
         professional_id: selectedProfessional,
         blocked_date: dateStr,
@@ -233,7 +215,7 @@ export default function AdminAvailableDays() {
         end_time: specificEndTime 
       }]);
       
-      toast({ title: 'Sucesso', description: 'Horário adicionado.' });
+      toast({ title: 'Sucesso!', description: 'Horário adicionado.' });
     } catch (error) {
       toast({ variant: 'destructive', title: 'Erro', description: 'Não foi possível adicionar.' });
     }
@@ -253,7 +235,7 @@ export default function AdminAvailableDays() {
       setSpecificDates(specificDates.filter(d => 
         !(d.date === dateStr && d.start_time === startTime && d.end_time === endTime)
       ));
-      toast({ title: 'Sucesso', description: 'Horário removido.' });
+      toast({ title: 'Sucesso!', description: 'Horário removido.' });
     } catch (error) {
       toast({ variant: 'destructive', title: 'Erro', description: 'Não foi possível remover.' });
     }
@@ -273,6 +255,18 @@ export default function AdminAvailableDays() {
     }));
   };
 
+  const setWorkWeekDefaults = () => {
+    setSelectedDays({
+      0: { enabled: false, start: '09:00', end: '17:00' },
+      1: { enabled: true, start: '09:00', end: '17:00' },
+      2: { enabled: true, start: '09:00', end: '17:00' },
+      3: { enabled: true, start: '09:00', end: '17:00' },
+      4: { enabled: true, start: '09:00', end: '17:00' },
+      5: { enabled: true, start: '09:00', end: '17:00' },
+      6: { enabled: false, start: '09:00', end: '17:00' },
+    });
+  };
+
   if (loading) {
     return (
       <div className="flex items-center justify-center py-12">
@@ -282,6 +276,7 @@ export default function AdminAvailableDays() {
   }
 
   const enabledDaysCount = Object.values(selectedDays).filter(d => d.enabled).length;
+  const selectedProfessionalName = professionals.find(p => p.id === selectedProfessional)?.name;
 
   return (
     <div className="space-y-6 animate-fade-in">
@@ -292,13 +287,15 @@ export default function AdminAvailableDays() {
             Configurar Disponibilidade
           </CardTitle>
           <CardDescription>
-            Configure os dias e horários de trabalho do profissional.
+            Configure os dias e horários de trabalho do profissional
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-6">
-          <div className="max-w-xs">
+          {/* Professional Selector */}
+          <div className="flex flex-col sm:flex-row gap-4 items-start sm:items-center">
+            <Label className="text-sm font-medium min-w-fit">Profissional:</Label>
             <Select value={selectedProfessional} onValueChange={setSelectedProfessional}>
-              <SelectTrigger>
+              <SelectTrigger className="max-w-xs">
                 <SelectValue placeholder="Selecione um profissional" />
               </SelectTrigger>
               <SelectContent>
@@ -315,45 +312,56 @@ export default function AdminAvailableDays() {
             <TabsList className="grid w-full max-w-md grid-cols-2">
               <TabsTrigger value="weekly" className="gap-2">
                 <Clock className="h-4 w-4" />
-                Semanal
+                Agenda Semanal
               </TabsTrigger>
               <TabsTrigger value="specific" className="gap-2">
                 <CalendarDays className="h-4 w-4" />
-                Datas Específicas
+                Datas Extras
               </TabsTrigger>
             </TabsList>
 
+            {/* Weekly Schedule Tab */}
             <TabsContent value="weekly" className="mt-6">
               <div className="space-y-6">
-                <p className="text-sm text-muted-foreground">
-                  Configure os dias e horários regulares de trabalho:
-                </p>
+                <div className="flex items-center justify-between">
+                  <p className="text-sm text-muted-foreground">
+                    Ative os dias e configure os horários de atendimento de <strong>{selectedProfessionalName}</strong>
+                  </p>
+                  <Button variant="outline" size="sm" onClick={setWorkWeekDefaults}>
+                    Seg-Sex (9h-17h)
+                  </Button>
+                </div>
                 
-                <div className="space-y-3">
+                <div className="space-y-2">
                   {dayNames.map((name, index) => (
-                    <div key={index} className="flex items-center gap-4 p-3 rounded-lg border bg-card">
-                      <button
-                        type="button"
-                        onClick={() => toggleDay(index)}
-                        className={`min-w-24 px-4 py-2 rounded-lg text-sm font-medium transition-all ${
-                          selectedDays[index].enabled
-                            ? 'bg-primary text-primary-foreground'
-                            : 'bg-secondary text-secondary-foreground hover:bg-secondary/80'
-                        }`}
-                      >
-                        {dayNamesShort[index]}
-                      </button>
+                    <div 
+                      key={index} 
+                      className={`flex items-center gap-4 p-4 rounded-lg border transition-colors ${
+                        selectedDays[index].enabled 
+                          ? 'bg-primary/5 border-primary/30' 
+                          : 'bg-muted/30'
+                      }`}
+                    >
+                      <Switch
+                        checked={selectedDays[index].enabled}
+                        onCheckedChange={() => toggleDay(index)}
+                      />
+                      
+                      <span className={`min-w-32 font-medium ${
+                        selectedDays[index].enabled ? 'text-foreground' : 'text-muted-foreground'
+                      }`}>
+                        {name}
+                      </span>
                       
                       {selectedDays[index].enabled && (
                         <div className="flex items-center gap-2 flex-1">
-                          <Label className="text-sm text-muted-foreground">Das</Label>
                           <Input
                             type="time"
                             value={selectedDays[index].start}
                             onChange={(e) => updateDayTime(index, 'start', e.target.value)}
                             className="w-28"
                           />
-                          <Label className="text-sm text-muted-foreground">às</Label>
+                          <span className="text-muted-foreground">até</span>
                           <Input
                             type="time"
                             value={selectedDays[index].end}
@@ -368,34 +376,28 @@ export default function AdminAvailableDays() {
 
                 <div className="flex items-center justify-between pt-4 border-t">
                   <div className="text-sm text-muted-foreground">
-                    {enabledDaysCount} dia(s) selecionado(s)
+                    <span className="font-medium text-foreground">{enabledDaysCount}</span> dia(s) ativo(s)
                   </div>
-                  <div className="flex gap-2">
-                    <Button variant="outline" onClick={() => setSelectedDays({
-                      0: { enabled: false, start: '09:00', end: '17:00' },
-                      1: { enabled: false, start: '09:00', end: '17:00' },
-                      2: { enabled: false, start: '09:00', end: '17:00' },
-                      3: { enabled: false, start: '09:00', end: '17:00' },
-                      4: { enabled: false, start: '09:00', end: '17:00' },
-                      5: { enabled: false, start: '09:00', end: '17:00' },
-                      6: { enabled: false, start: '09:00', end: '17:00' },
-                    })}>
-                      <Trash2 className="h-4 w-4 mr-2" />
-                      Limpar
-                    </Button>
-                    <Button onClick={handleSaveWeekly} className="gradient-primary" disabled={saving}>
-                      {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Salvar Disponibilidade'}
-                    </Button>
-                  </div>
+                  <Button onClick={handleSaveWeekly} className="gradient-primary gap-2" disabled={saving}>
+                    {saving ? (
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                    ) : (
+                      <>
+                        <Save className="h-4 w-4" />
+                        Salvar Agenda
+                      </>
+                    )}
+                  </Button>
                 </div>
               </div>
             </TabsContent>
 
+            {/* Specific Dates Tab */}
             <TabsContent value="specific" className="mt-6">
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                 <div className="space-y-4">
                   <p className="text-sm text-muted-foreground">
-                    Adicione datas específicas em que o profissional estará disponível:
+                    Adicione datas extras (feriados trabalhados, plantões, etc.)
                   </p>
                   
                   <Calendar
@@ -408,20 +410,22 @@ export default function AdminAvailableDays() {
                   />
 
                   {selectedCalendarDate && (
-                    <Card className="bg-secondary/30">
+                    <Card className="bg-primary/5 border-primary/30">
                       <CardContent className="pt-4 space-y-4">
-                        <p className="font-medium">
-                          {format(selectedCalendarDate, "dd 'de' MMMM 'de' yyyy", { locale: ptBR })}
-                        </p>
                         <div className="flex items-center gap-2">
-                          <Label className="text-sm">Das</Label>
+                          <CalendarDays className="h-4 w-4 text-primary" />
+                          <span className="font-medium">
+                            {format(selectedCalendarDate, "dd 'de' MMMM 'de' yyyy", { locale: ptBR })}
+                          </span>
+                        </div>
+                        <div className="flex items-center gap-2">
                           <Input
                             type="time"
                             value={specificStartTime}
                             onChange={(e) => setSpecificStartTime(e.target.value)}
                             className="w-28"
                           />
-                          <Label className="text-sm">às</Label>
+                          <span className="text-muted-foreground">até</span>
                           <Input
                             type="time"
                             value={specificEndTime}
@@ -429,7 +433,8 @@ export default function AdminAvailableDays() {
                             className="w-28"
                           />
                         </div>
-                        <Button onClick={handleAddSpecificDate} className="w-full gradient-primary">
+                        <Button onClick={handleAddSpecificDate} className="w-full gradient-primary gap-2">
+                          <Plus className="h-4 w-4" />
                           Adicionar Data
                         </Button>
                       </CardContent>
@@ -438,35 +443,44 @@ export default function AdminAvailableDays() {
                 </div>
 
                 <div className="space-y-4">
-                  <p className="text-sm font-medium">Datas específicas configuradas:</p>
+                  <p className="text-sm font-medium">Datas extras configuradas:</p>
                   
                   {specificDates.length === 0 ? (
                     <Card className="bg-muted/30">
                       <CardContent className="py-8 text-center text-muted-foreground">
-                        Nenhuma data específica adicionada.
+                        <CalendarDays className="h-12 w-12 mx-auto mb-4 opacity-50" />
+                        <p>Nenhuma data extra adicionada</p>
+                        <p className="text-sm mt-1">Selecione uma data no calendário</p>
                       </CardContent>
                     </Card>
                   ) : (
-                    <div className="space-y-2 max-h-96 overflow-y-auto">
+                    <div className="space-y-2 max-h-[400px] overflow-y-auto pr-2">
                       {specificDates
                         .sort((a, b) => a.date.localeCompare(b.date) || a.start_time.localeCompare(b.start_time))
                         .map(d => (
                           <div 
                             key={`${d.date}-${d.start_time}-${d.end_time}`} 
-                            className="flex items-center justify-between p-3 rounded-lg border bg-card"
+                            className="flex items-center justify-between p-3 rounded-lg border bg-card hover:bg-muted/50 transition-colors"
                           >
-                            <div>
-                              <p className="font-medium">
-                                {format(parseISO(d.date), "dd/MM/yyyy (EEEE)", { locale: ptBR })}
-                              </p>
-                              <p className="text-sm text-muted-foreground">
-                                {d.start_time} - {d.end_time}
-                              </p>
+                            <div className="flex items-center gap-3">
+                              <div className="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center">
+                                <span className="text-sm font-bold text-primary">
+                                  {format(new Date(d.date + 'T12:00:00'), 'dd')}
+                                </span>
+                              </div>
+                              <div>
+                                <div className="font-medium">
+                                  {format(new Date(d.date + 'T12:00:00'), "EEEE", { locale: ptBR })}
+                                </div>
+                                <div className="text-sm text-muted-foreground">
+                                  {format(new Date(d.date + 'T12:00:00'), "dd/MM/yyyy", { locale: ptBR })} • {d.start_time} - {d.end_time}
+                                </div>
+                              </div>
                             </div>
-                            <Button
-                              variant="ghost"
+                            <Button 
+                              variant="ghost" 
                               size="icon"
-                              className="text-destructive hover:text-destructive"
+                              className="text-destructive hover:text-destructive hover:bg-destructive/10"
                               onClick={() => handleRemoveSpecificDate(d.date, d.start_time, d.end_time)}
                             >
                               <Trash2 className="h-4 w-4" />

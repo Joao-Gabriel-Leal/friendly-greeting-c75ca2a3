@@ -1,14 +1,12 @@
 import { useState } from 'react';
 import { useAuth } from '@/lib/auth';
 import { Card, CardContent } from '@/components/ui/card';
-import { Button } from '@/components/ui/button';
-import { Clock, User, ArrowLeft } from 'lucide-react';
+import { Clock, User } from 'lucide-react';
 import SpecialtySelector from '@/components/user/SpecialtySelector';
-import DateSelector from '@/components/user/DateSelector';
-import TimeSelector from '@/components/user/TimeSelector';
+import DateTimeSelector from '@/components/user/DateTimeSelector';
 import MyAppointments from '@/components/user/MyAppointments';
 
-type Step = 'home' | 'specialty' | 'date' | 'time' | 'appointments';
+type Step = 'home' | 'specialty' | 'datetime' | 'appointments';
 
 export default function AdminMyBooking() {
   const { profile } = useAuth();
@@ -17,31 +15,22 @@ export default function AdminMyBooking() {
   const [selectedSpecialtyId, setSelectedSpecialtyId] = useState<string | null>(null);
   const [selectedProfessional, setSelectedProfessional] = useState<string | null>(null);
   const [selectedProfessionalName, setSelectedProfessionalName] = useState<string | null>(null);
-  const [selectedDate, setSelectedDate] = useState<Date | null>(null);
 
   const handleSpecialtySelect = (specialty: string, specialtyId: string, professionalId: string, professionalName: string) => {
     setSelectedSpecialty(specialty);
     setSelectedSpecialtyId(specialtyId);
     setSelectedProfessional(professionalId);
     setSelectedProfessionalName(professionalName);
-    setStep('date');
-  };
-
-  const handleDateSelect = (date: Date) => {
-    setSelectedDate(date);
-    setStep('time');
+    setStep('datetime');
   };
 
   const handleBack = () => {
-    if (step === 'date') {
+    if (step === 'datetime') {
       setStep('specialty');
       setSelectedSpecialty(null);
       setSelectedSpecialtyId(null);
       setSelectedProfessional(null);
       setSelectedProfessionalName(null);
-    } else if (step === 'time') {
-      setStep('date');
-      setSelectedDate(null);
     } else {
       setStep('home');
     }
@@ -53,7 +42,6 @@ export default function AdminMyBooking() {
     setSelectedSpecialtyId(null);
     setSelectedProfessional(null);
     setSelectedProfessionalName(null);
-    setSelectedDate(null);
   };
 
   return (
@@ -114,23 +102,12 @@ export default function AdminMyBooking() {
         <SpecialtySelector onSelect={handleSpecialtySelect} onBack={handleBack} />
       )}
 
-      {step === 'date' && selectedProfessional && selectedSpecialtyId && (
-        <DateSelector 
-          professionalId={selectedProfessional}
-          specialtyId={selectedSpecialtyId}
-          specialty={selectedSpecialty!}
-          onSelect={handleDateSelect}
-          onBack={handleBack}
-        />
-      )}
-
-      {step === 'time' && selectedProfessional && selectedDate && selectedSpecialtyId && (
-        <TimeSelector
+      {step === 'datetime' && selectedProfessional && selectedSpecialtyId && (
+        <DateTimeSelector 
           professionalId={selectedProfessional}
           professionalName={selectedProfessionalName!}
           specialtyId={selectedSpecialtyId}
           specialty={selectedSpecialty!}
-          date={selectedDate}
           onComplete={handleComplete}
           onBack={handleBack}
         />

@@ -25,20 +25,21 @@ export default function SpecialtySelector({ onSelect, onBack }: SpecialtySelecto
   const [specialtiesWithProfs, setSpecialtiesWithProfs] = useState<SpecialtyWithProfessionals[]>([]);
   const [blockedSpecialtyIds, setBlockedSpecialtyIds] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
-  const [hasTriedRefresh, setHasTriedRefresh] = useState(false);
 
+  // Fetch data immediately on mount
   useEffect(() => {
-    fetchBlockedSpecialties();
+    const initialize = async () => {
+      setLoading(true);
+      await refresh(); // Force refresh to ensure we have the latest data
+      if (user) {
+        await fetchBlockedSpecialties();
+      }
+      setLoading(false);
+    };
+    initialize();
   }, [user]);
 
-  // Se não há especialidades após carregar, força um refresh
-  useEffect(() => {
-    if (!dataLoading && specialties.length === 0 && !hasTriedRefresh) {
-      setHasTriedRefresh(true);
-      refresh();
-    }
-  }, [dataLoading, specialties.length, hasTriedRefresh, refresh]);
-
+  // Build specialties list when data changes
   useEffect(() => {
     if (!dataLoading && specialties.length > 0) {
       buildSpecialtiesList();
@@ -84,7 +85,7 @@ export default function SpecialtySelector({ onSelect, onBack }: SpecialtySelecto
     setSpecialtiesWithProfs(result);
   };
 
-  if (loading || dataLoading || (specialties.length === 0 && !hasTriedRefresh)) {
+  if (loading || dataLoading) {
     return (
       <div className="flex items-center justify-center py-12">
         <Loader2 className="h-8 w-8 animate-spin text-primary" />

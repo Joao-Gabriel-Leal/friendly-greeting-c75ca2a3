@@ -5,8 +5,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Calendar, LogOut, User, Clock, AlertTriangle } from 'lucide-react';
 import { ConditionalThemeToggle } from '@/components/ConditionalThemeToggle';
 import SpecialtySelector from './SpecialtySelector';
-import DateSelector from './DateSelector';
-import TimeSelector from './TimeSelector';
+import DateTimeSelector from './DateTimeSelector';
 import MyAppointments from './MyAppointments';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
@@ -16,7 +15,7 @@ interface UserDashboardProps {
   suspendedUntil: Date | null;
 }
 
-type Step = 'home' | 'specialty' | 'date' | 'time' | 'appointments';
+type Step = 'home' | 'specialty' | 'datetime' | 'appointments';
 
 export default function UserDashboard({ isSuspended, suspendedUntil }: UserDashboardProps) {
   const { profile, signOut } = useAuth();
@@ -25,31 +24,22 @@ export default function UserDashboard({ isSuspended, suspendedUntil }: UserDashb
   const [selectedSpecialtyId, setSelectedSpecialtyId] = useState<string | null>(null);
   const [selectedProfessional, setSelectedProfessional] = useState<string | null>(null);
   const [selectedProfessionalName, setSelectedProfessionalName] = useState<string | null>(null);
-  const [selectedDate, setSelectedDate] = useState<Date | null>(null);
 
   const handleSpecialtySelect = (specialty: string, specialtyId: string, professionalId: string, professionalName: string) => {
     setSelectedSpecialty(specialty);
     setSelectedSpecialtyId(specialtyId);
     setSelectedProfessional(professionalId);
     setSelectedProfessionalName(professionalName);
-    setStep('date');
-  };
-
-  const handleDateSelect = (date: Date) => {
-    setSelectedDate(date);
-    setStep('time');
+    setStep('datetime');
   };
 
   const handleBack = () => {
-    if (step === 'date') {
+    if (step === 'datetime') {
       setStep('specialty');
       setSelectedSpecialty(null);
       setSelectedSpecialtyId(null);
       setSelectedProfessional(null);
       setSelectedProfessionalName(null);
-    } else if (step === 'time') {
-      setStep('date');
-      setSelectedDate(null);
     } else {
       setStep('home');
     }
@@ -61,7 +51,6 @@ export default function UserDashboard({ isSuspended, suspendedUntil }: UserDashb
     setSelectedSpecialtyId(null);
     setSelectedProfessional(null);
     setSelectedProfessionalName(null);
-    setSelectedDate(null);
   };
 
   if (isSuspended && suspendedUntil) {
@@ -194,23 +183,12 @@ export default function UserDashboard({ isSuspended, suspendedUntil }: UserDashb
           <SpecialtySelector onSelect={handleSpecialtySelect} onBack={handleBack} />
         )}
 
-        {step === 'date' && selectedProfessional && selectedSpecialtyId && (
-          <DateSelector 
-            professionalId={selectedProfessional}
-            specialtyId={selectedSpecialtyId}
-            specialty={selectedSpecialty!}
-            onSelect={handleDateSelect}
-            onBack={handleBack}
-          />
-        )}
-
-        {step === 'time' && selectedProfessional && selectedDate && selectedSpecialtyId && (
-          <TimeSelector
+        {step === 'datetime' && selectedProfessional && selectedSpecialtyId && (
+          <DateTimeSelector 
             professionalId={selectedProfessional}
             professionalName={selectedProfessionalName!}
             specialtyId={selectedSpecialtyId}
             specialty={selectedSpecialty!}
-            date={selectedDate}
             onComplete={handleComplete}
             onBack={handleBack}
           />
