@@ -1,5 +1,5 @@
 import { useEffect, useState, useMemo } from 'react';
-import { supabase } from '@/integrations/supabase/client';
+import { availabilityApi, appointmentsApi } from '@/lib/api';
 import { useAuth } from '@/lib/auth';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -11,9 +11,9 @@ import { isBrazilianHoliday } from '@/lib/brazilianHolidays';
 import { useToast } from '@/hooks/use-toast';
 
 interface DateTimeSelectorProps {
-  professionalId: string;
+  professionalId: number;
   professionalName: string;
-  specialtyId: string;
+  specialtyId: number;
   specialty: string;
   onComplete: () => void;
   onBack: () => void;
@@ -47,7 +47,7 @@ export default function DateTimeSelector({
   const [availableDays, setAvailableDays] = useState<number[]>([]);
   const [blockedDates, setBlockedDates] = useState<Date[]>([]);
   const [specificAvailableDates, setSpecificAvailableDates] = useState<Date[]>([]);
-  const [existingAppointment, setExistingAppointment] = useState<{ id: string; date: string } | null>(null);
+  const [existingAppointment, setExistingAppointment] = useState<{ id: number; date: string } | null>(null);
   const [selectedDate, setSelectedDate] = useState<Date | undefined>();
   
   // Time slots state
@@ -86,30 +86,34 @@ export default function DateTimeSelector({
     const maxDate = addDays(today, 30);
 
     try {
-      const { data: availableData } = await supabase
-        .from('available_days')
-        .select('day_of_week')
-        .eq('professional_id', professionalId);
+      const [availableResult, blockedResult] = await Promise.all([
+        availabilityApi.getByProfessional(professionalId),
+        availabilityApi.getBlockedDays(professionalId)
+      ]);
 
-      if (availableData) {
-        setAvailableDays(availableData.map(d => d.day_of_week));
+      if (availableResult.data) {
+        const days = availableResult.data
+          .filter((d: any) => d.day_of_week !== undefined)
+          .map((d: any) => d.day_of_week);
+        setAvailableDays(days);
       }
 
-      const { data: blockedData } = await supabase
-        .from('blocked_days')
-        .select('blocked_date, reason')
-        .or(`professional_id.eq.${professionalId},professional_id.is.null`)
-        .gte('blocked_date', format(today, 'yyyy-MM-dd'))
-        .lte('blocked_date', format(maxDate, 'yyyy-MM-dd'));
-
-      if (blockedData) {
-        const blocked = blockedData
-          .filter(d => !d.reason?.startsWith('AVAILABLE:'))
-          .map(d => new Date(d.blocked_date + 'T12:00:00'));
+      if (blockedResult.data) {
+        const blocked = blockedResult.data
+          .filter((d: any) => !d.reason?.startsWith('AVAILABLE:'))
+          .filter((d: any) => {
+            const date = new Date(d.blocked_date + 'T12:00:00');
+            return date >= today && date <= maxDate;
+          })
+          .map((d: any) => new Date(d.blocked_date + 'T12:00:00'));
         
-        const specificAvailable = blockedData
-          .filter(d => d.reason?.startsWith('AVAILABLE:'))
-          .map(d => new Date(d.blocked_date + 'T12:00:00'));
+        const specificAvailable = blockedResult.data
+          .filter((d: any) => d.reason?.startsWith('AVAILABLE:'))
+          .filter((d: any) => {
+            const date = new Date(d.blocked_date + 'T12:00:00');
+            return date >= today && date <= maxDate;
+          })
+          .map((d: any) => new Date(d.blocked_date + 'T12:00:00'));
         
         setBlockedDates(blocked);
         setSpecificAvailableDates(specificAvailable);
@@ -125,19 +129,17 @@ export default function DateTimeSelector({
     try {
       const today = new Date();
       const monthStart = startOfMonth(today);
-      const monthEnd = endOfMonth(today);
 
-      const { data } = await supabase
-        .from('appointments')
-        .select('id, appointment_date, appointment_time, status, professional_confirmed, user_confirmed')
-        .eq('user_id', user.id)
-        .eq('specialty_id', specialtyId)
-        .in('status', ['scheduled', 'completed'])
-        .gte('appointment_date', format(monthStart, 'yyyy-MM-dd'))
-        .lte('appointment_date', format(monthEnd, 'yyyy-MM-dd'));
+      const result = await appointmentsApi.getByUser();
 
-      if (data && data.length > 0) {
-        const blockingAppointment = data.find(apt => {
+      if (result.data && result.data.length > 0) {
+        const relevantAppointments = result.data.filter((apt: any) => 
+          apt.specialty_id === specialtyId &&
+          ['scheduled', 'completed'].includes(apt.status) &&
+          new Date(apt.appointment_date) >= monthStart
+        );
+
+        const blockingAppointment = relevantAppointments.find((apt: any) => {
           if (apt.status === 'scheduled') {
             const aptDate = new Date(apt.appointment_date + 'T' + apt.appointment_time);
             if (aptDate > today) return true;
@@ -165,37 +167,19 @@ export default function DateTimeSelector({
     const dateStr = format(selectedDate, 'yyyy-MM-dd');
 
     try {
-      const [availabilityResult, bookedResult] = await Promise.all([
-        supabase
-          .from('blocked_days')
-          .select('reason')
-          .eq('professional_id', professionalId)
-          .eq('blocked_date', dateStr)
-          .like('reason', 'AVAILABLE:%'),
-        supabase.functions.invoke('get-booked-slots', {
-          body: { professionalId, date: dateStr },
-        })
+      const [slotsResult, bookedResult] = await Promise.all([
+        availabilityApi.getAvailableSlots(professionalId, dateStr, 30),
+        appointmentsApi.getBookedSlots(professionalId, dateStr)
       ]);
 
-      let timeSlots: string[] = [];
-      if (availabilityResult.data && availabilityResult.data.length > 0) {
-        availabilityResult.data.forEach(entry => {
-          if (entry.reason) {
-            const match = entry.reason.match(/AVAILABLE:\s*(\d{2}:\d{2})\s*-\s*(\d{2}:\d{2})/);
-            if (match) {
-              const [, startTime, endTime] = match;
-              const slots = generateTimeSlots(startTime, endTime);
-              timeSlots = [...timeSlots, ...slots];
-            }
-          }
-        });
+      if (slotsResult.data) {
+        setAvailableTimeSlots(slotsResult.data);
+      } else {
+        setAvailableTimeSlots([]);
       }
 
-      timeSlots = [...new Set(timeSlots)].sort();
-      setAvailableTimeSlots(timeSlots);
-
-      if (bookedResult.data?.bookedSlots) {
-        setBookedSlots(bookedResult.data.bookedSlots);
+      if (bookedResult.data) {
+        setBookedSlots(bookedResult.data);
       } else {
         setBookedSlots([]);
       }
@@ -240,15 +224,14 @@ export default function DateTimeSelector({
     const dateStr = format(selectedDate, 'yyyy-MM-dd');
 
     try {
-      const { error } = await supabase.from('appointments').insert({
-        user_id: user.id,
+      const result = await appointmentsApi.create({
         professional_id: professionalId,
         specialty_id: specialtyId,
         appointment_date: dateStr,
         appointment_time: selectedTime + ':00',
       });
 
-      if (error) throw error;
+      if (result.error) throw new Error(result.error);
 
       toast({
         title: 'Agendamento confirmado!',
@@ -256,7 +239,7 @@ export default function DateTimeSelector({
       });
       onComplete();
     } catch (error: any) {
-      if (error.message?.includes('duplicate') || error.code === '23505') {
+      if (error.message?.includes('duplicate') || error.message?.includes('já existe')) {
         toast({
           variant: 'destructive',
           title: 'Horário indisponível',

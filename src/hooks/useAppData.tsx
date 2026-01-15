@@ -1,8 +1,8 @@
 import { createContext, useContext, useEffect, useState, ReactNode, useCallback } from 'react';
-import { supabase } from '@/integrations/supabase/client';
+import { professionalsApi, specialtiesApi } from '@/lib/api';
 
 interface Professional {
-  id: string;
+  id: number;
   name: string;
   email: string | null;
   phone: string | null;
@@ -10,7 +10,7 @@ interface Professional {
 }
 
 interface Specialty {
-  id: string;
+  id: number;
   name: string;
   description: string | null;
   duration_minutes: number;
@@ -18,8 +18,8 @@ interface Specialty {
 }
 
 interface ProfessionalSpecialty {
-  professional_id: string;
-  specialty_id: string;
+  professional_id: number;
+  specialty_id: number;
   professional: Professional;
 }
 
@@ -29,8 +29,8 @@ interface AppDataContextType {
   professionalSpecialties: ProfessionalSpecialty[];
   loading: boolean;
   refresh: () => Promise<void>;
-  getSpecialtyProfessionals: (specialtyId: string) => Professional[];
-  getProfessionalSpecialties: (professionalId: string) => Specialty[];
+  getSpecialtyProfessionals: (specialtyId: number) => Professional[];
+  getProfessionalSpecialties: (professionalId: number) => Specialty[];
 }
 
 const AppDataContext = createContext<AppDataContextType | undefined>(undefined);
@@ -54,31 +54,31 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
     try {
       setLoading(true);
       
-      // Buscar tudo em paralelo
-      const [profsResult, specsResult, profSpecsResult] = await Promise.all([
-        supabase
-          .from('professionals')
-          .select('id, name, email, phone, active')
-          .eq('active', true),
-        supabase
-          .from('specialties')
-          .select('id, name, description, duration_minutes, active')
-          .eq('active', true),
-        supabase
-          .from('professional_specialties')
-          .select('professional_id, specialty_id, professionals (id, name, email, phone, active)')
+      // Buscar tudo em paralelo usando a API local
+      const [profsResult, specsResult] = await Promise.all([
+        professionalsApi.list(true),
+        specialtiesApi.list(true),
       ]);
 
       if (profsResult.data) setProfessionals(profsResult.data);
       if (specsResult.data) setSpecialties(specsResult.data);
-      if (profSpecsResult.data) {
-        setProfessionalSpecialties(
-          profSpecsResult.data.map(ps => ({
-            professional_id: ps.professional_id,
-            specialty_id: ps.specialty_id,
-            professional: ps.professionals as unknown as Professional
-          }))
-        );
+
+      // Construir professionalSpecialties a partir dos profissionais retornados
+      // que já incluem suas especialidades
+      if (profsResult.data) {
+        const profSpecs: ProfessionalSpecialty[] = [];
+        profsResult.data.forEach((prof: any) => {
+          if (prof.specialties) {
+            prof.specialties.forEach((specId: number) => {
+              profSpecs.push({
+                professional_id: prof.id,
+                specialty_id: specId,
+                professional: prof
+              });
+            });
+          }
+        });
+        setProfessionalSpecialties(profSpecs);
       }
 
       setLastFetch(now);
@@ -98,14 +98,14 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
     await fetchData(true);
   }, []);
 
-  const getSpecialtyProfessionals = useCallback((specialtyId: string): Professional[] => {
+  const getSpecialtyProfessionals = useCallback((specialtyId: number): Professional[] => {
     return professionalSpecialties
       .filter(ps => ps.specialty_id === specialtyId && ps.professional?.active)
       .map(ps => ps.professional)
       .filter(Boolean);
   }, [professionalSpecialties]);
 
-  const getProfessionalSpecialties = useCallback((professionalId: string): Specialty[] => {
+  const getProfessionalSpecialties = useCallback((professionalId: number): Specialty[] => {
     const specIds = professionalSpecialties
       .filter(ps => ps.professional_id === professionalId)
       .map(ps => ps.specialty_id);
