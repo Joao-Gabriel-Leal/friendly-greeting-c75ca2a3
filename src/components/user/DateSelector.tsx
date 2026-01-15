@@ -92,19 +92,14 @@ export default function DateSelector({ professionalId, specialtyId, specialty, o
       );
 
       if (data && data.length > 0) {
-        // Verificar se existe agendamento que realmente bloqueia novo agendamento:
-        // 1. Agendamentos futuros (scheduled)
-        // 2. Agendamentos completed COM ambas confirmações
+        // Verificar se existe agendamento que realmente bloqueia novo agendamento
         const blockingAppointment = data.find(apt => {
           if (apt.status === 'scheduled') {
-            // Se é agendado e ainda não passou, bloqueia
             const aptDate = new Date(apt.appointment_date + 'T' + apt.appointment_time);
             if (aptDate > today) return true;
-            // Se passou mas profissional ainda não confirmou, também bloqueia (aguardando confirmação)
             return !apt.professional_confirmed;
           }
           if (apt.status === 'completed') {
-            // Completed só bloqueia se ambos confirmaram
             return apt.professional_confirmed && apt.user_confirmed;
           }
           return false;
@@ -125,26 +120,19 @@ export default function DateSelector({ professionalId, specialtyId, specialty, o
     const maxDate = addDays(today, 30);
 
     if (normalizedDate < today || normalizedDate > maxDate) return false;
-
-    // Check if this date is blocked
     if (blockedDates.some(blocked => isSameDay(blocked, date))) return false;
-
-    // Check if this is a Brazilian holiday
     if (isBrazilianHoliday(date)) return false;
 
-    // Check if this date has specific availability configured (overrides weekly schedule)
     if (specificAvailableDates.some(specific => isSameDay(specific, date))) {
       return true;
     }
 
     const dayOfWeek = date.getDay();
     
-    // If available days are configured, check if this day is allowed
     if (availableDays.length > 0 && !availableDays.includes(dayOfWeek)) {
       return false;
     }
 
-    // Default: exclude weekends if no availability configured
     if (availableDays.length === 0 && (dayOfWeek === 0 || dayOfWeek === 6)) {
       return false;
     }

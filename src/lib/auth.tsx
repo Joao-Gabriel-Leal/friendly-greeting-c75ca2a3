@@ -57,28 +57,21 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
       const response = await authApi.getProfile();
       
-      if (response.error) {
-        console.error('Error fetching profile:', response.error);
-        // Token inválido, limpar
-        localStorage.removeItem('auth_token');
-        setUser(null);
-        setProfile(null);
-        setUserRole(null);
-        setLoading(false);
-        return;
-      }
-
-      if (response.data) {
-        setUser(response.data.user);
+      if (response) {
+        setUser(response.user);
         setProfile({
-          ...response.data.profile,
-          blocked: response.data.profile?.blocked || false,
-          must_change_password: response.data.profile?.must_change_password || false,
+          ...response.profile,
+          blocked: response.profile?.blocked || false,
+          must_change_password: response.profile?.must_change_password || false,
         });
-        setUserRole(response.data.role as 'admin' | 'professional' | 'user' | 'developer' || 'user');
+        setUserRole(response.role as 'admin' | 'professional' | 'user' | 'developer' || 'user');
       }
     } catch (error) {
       console.error('Error in fetchProfile:', error);
+      localStorage.removeItem('auth_token');
+      setUser(null);
+      setProfile(null);
+      setUserRole(null);
     } finally {
       setLoading(false);
     }
@@ -92,46 +85,34 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     try {
       const response = await authApi.login(email, password);
 
-      if (response.error) {
-        return { error: new Error(response.error) };
+      if (response?.profile?.blocked) {
+        authApi.logout();
+        return { error: new Error('Conta bloqueada. Contate os administradores.') };
       }
 
-      if (response.data) {
-        // Check if account is blocked
-        if (response.data.profile?.blocked) {
-          authApi.logout();
-          return { error: new Error('Conta bloqueada. Contate os administradores.') };
-        }
-
-        setUser(response.data.user);
-        setProfile({
-          ...response.data.profile,
-          blocked: response.data.profile?.blocked || false,
-          must_change_password: response.data.profile?.must_change_password || false,
-        });
-        setUserRole(response.data.role as 'admin' | 'professional' | 'user' | 'developer' || 'user');
-      }
+      setUser(response.user);
+      setProfile({
+        ...response.profile,
+        blocked: response.profile?.blocked || false,
+        must_change_password: response.profile?.must_change_password || false,
+      });
+      setUserRole(response.role as 'admin' | 'professional' | 'user' | 'developer' || 'user');
 
       return { error: null };
-    } catch (error) {
-      return { error: error as Error };
+    } catch (error: any) {
+      return { error: new Error(error.message || 'Erro ao fazer login') };
     }
   };
 
   const signUp = async (email: string, password: string, name: string, setor: string) => {
     try {
-      const response = await authApi.register(email, password, name, setor);
-
-      if (response.error) {
-        if (response.error.includes('already registered') || response.error.includes('já cadastrado')) {
-          return { error: new Error('Este email já está cadastrado') };
-        }
-        return { error: new Error(response.error) };
-      }
-
+      await authApi.register(email, password, name, setor);
       return { error: null };
-    } catch (error) {
-      return { error: error as Error };
+    } catch (error: any) {
+      if (error.message?.includes('already registered') || error.message?.includes('já cadastrado')) {
+        return { error: new Error('Este email já está cadastrado') };
+      }
+      return { error: new Error(error.message || 'Erro ao cadastrar') };
     }
   };
 
