@@ -91,15 +91,15 @@ export default function DateTimeSelector({
         availabilityApi.getBlockedDays(professionalId)
       ]);
 
-      if (availableResult.data) {
-        const days = availableResult.data
+      if (availableResult && Array.isArray(availableResult)) {
+        const days = availableResult
           .filter((d: any) => d.day_of_week !== undefined)
           .map((d: any) => d.day_of_week);
         setAvailableDays(days);
       }
 
-      if (blockedResult.data) {
-        const blocked = blockedResult.data
+      if (blockedResult && Array.isArray(blockedResult)) {
+        const blocked = blockedResult
           .filter((d: any) => !d.reason?.startsWith('AVAILABLE:'))
           .filter((d: any) => {
             const date = new Date(d.blocked_date + 'T12:00:00');
@@ -107,7 +107,7 @@ export default function DateTimeSelector({
           })
           .map((d: any) => new Date(d.blocked_date + 'T12:00:00'));
         
-        const specificAvailable = blockedResult.data
+        const specificAvailable = blockedResult
           .filter((d: any) => d.reason?.startsWith('AVAILABLE:'))
           .filter((d: any) => {
             const date = new Date(d.blocked_date + 'T12:00:00');
@@ -130,10 +130,10 @@ export default function DateTimeSelector({
       const today = new Date();
       const monthStart = startOfMonth(today);
 
-      const result = await appointmentsApi.getByUser();
+      const result = await appointmentsApi.getByUser(user.id);
 
-      if (result.data && result.data.length > 0) {
-        const relevantAppointments = result.data.filter((apt: any) => 
+      if (result && Array.isArray(result) && result.length > 0) {
+        const relevantAppointments = result.filter((apt: any) => 
           apt.specialty_id === specialtyId &&
           ['scheduled', 'completed'].includes(apt.status) &&
           new Date(apt.appointment_date) >= monthStart
@@ -172,14 +172,14 @@ export default function DateTimeSelector({
         appointmentsApi.getBookedSlots(professionalId, dateStr)
       ]);
 
-      if (slotsResult.data) {
-        setAvailableTimeSlots(slotsResult.data);
+      if (slotsResult && Array.isArray(slotsResult)) {
+        setAvailableTimeSlots(slotsResult);
       } else {
         setAvailableTimeSlots([]);
       }
 
-      if (bookedResult.data) {
-        setBookedSlots(bookedResult.data);
+      if (bookedResult && bookedResult.bookedSlots) {
+        setBookedSlots(bookedResult.bookedSlots);
       } else {
         setBookedSlots([]);
       }
@@ -224,14 +224,13 @@ export default function DateTimeSelector({
     const dateStr = format(selectedDate, 'yyyy-MM-dd');
 
     try {
-      const result = await appointmentsApi.create({
+      await appointmentsApi.create({
+        user_id: user.id,
         professional_id: professionalId,
         specialty_id: specialtyId,
         appointment_date: dateStr,
         appointment_time: selectedTime + ':00',
       });
-
-      if (result.error) throw new Error(result.error);
 
       toast({
         title: 'Agendamento confirmado!',
