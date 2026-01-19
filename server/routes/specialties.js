@@ -1,16 +1,23 @@
 const express = require('express');
-const { v4: uuidv4 } = require('uuid');
 const pool = require('../config/database');
 const { authMiddleware, adminMiddleware } = require('../middleware/auth');
 
 const router = express.Router();
 
-// GET /api/specialties - Get all active specialties
+// GET /api/specialties - Get specialties (supports ?active=true filter)
 router.get('/', async (req, res) => {
   try {
-    const { rows } = await pool.query(
-      'SELECT id, name, description, duration_minutes, active FROM specialties WHERE active = true ORDER BY name'
-    );
+    const { active } = req.query;
+    
+    let query = 'SELECT id, name, description, duration_minutes, active, created_at FROM specialties';
+    
+    if (active === 'true') {
+      query += ' WHERE active = true';
+    }
+    
+    query += ' ORDER BY name';
+
+    const { rows } = await pool.query(query);
     res.json(rows);
   } catch (error) {
     console.error('Get specialties error:', error);
@@ -31,6 +38,27 @@ router.get('/all', authMiddleware, adminMiddleware, async (req, res) => {
   }
 });
 
+// GET /api/specialties/:id - Get specialty by ID
+router.get('/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+    
+    const { rows } = await pool.query(
+      'SELECT * FROM specialties WHERE id = $1',
+      [id]
+    );
+
+    if (rows.length === 0) {
+      return res.status(404).json({ error: 'Especialidade não encontrada' });
+    }
+
+    res.json(rows[0]);
+  } catch (error) {
+    console.error('Get specialty error:', error);
+    res.status(500).json({ error: 'Erro ao buscar especialidade' });
+  }
+});
+
 // POST /api/specialties - Create specialty (admin)
 router.post('/', authMiddleware, adminMiddleware, async (req, res) => {
   try {
@@ -40,16 +68,10 @@ router.post('/', authMiddleware, adminMiddleware, async (req, res) => {
       return res.status(400).json({ error: 'Nome é obrigatório' });
     }
 
-    const specialtyId = uuidv4();
-
-    await pool.query(
-      'INSERT INTO specialties (id, name, description, duration_minutes, active, created_at) VALUES ($1, $2, $3, $4, true, NOW())',
-      [specialtyId, name, description || null, duration_minutes || 30]
-    );
-
+    // Insert specialty (SERIAL id auto-generated)
     const { rows: [specialty] } = await pool.query(
-      'SELECT * FROM specialties WHERE id = $1',
-      [specialtyId]
+      'INSERT INTO specialties (name, description, duration_minutes, active, created_at) VALUES ($1, $2, $3, true, NOW()) RETURNING *',
+      [name, description || null, duration_minutes || 30]
     );
 
     res.status(201).json(specialty);
@@ -65,15 +87,14 @@ router.put('/:id', authMiddleware, adminMiddleware, async (req, res) => {
     const { id } = req.params;
     const { name, description, duration_minutes, active } = req.body;
 
-    await pool.query(
-      'UPDATE specialties SET name = $1, description = $2, duration_minutes = $3, active = $4 WHERE id = $5',
+    const { rows: [specialty] } = await pool.query(
+      'UPDATE specialties SET name = $1, description = $2, duration_minutes = $3, active = $4 WHERE id = $5 RETURNING *',
       [name, description, duration_minutes || 30, active !== false, id]
     );
 
-    const { rows: [specialty] } = await pool.query(
-      'SELECT * FROM specialties WHERE id = $1',
-      [id]
-    );
+    if (!specialty) {
+      return res.status(404).json({ error: 'Especialidade não encontrada' });
+    }
 
     res.json(specialty);
   } catch (error) {
@@ -82,7 +103,22 @@ router.put('/:id', authMiddleware, adminMiddleware, async (req, res) => {
   }
 });
 
-// GET /api/professional-specialties - Get professional-specialty relationships
+// DELETE /api/specialties/:id - Delete specialty (admin)
+router.delete('/:id', authMiddleware, adminMiddleware, async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    // Soft delete - just deactivate
+    await pool.query('UPDATE specialties SET active = false WHERE id = $1', [id]);
+
+    res.json({ message: 'Especialidade removida com sucesso' });
+  } catch (error) {
+    console.error('Delete specialty error:', error);
+    res.status(500).json({ error: 'Erro ao remover especialidade' });
+  }
+});
+
+// GET /api/specialties/professional-specialties - Get professional-specialty relationships
 router.get('/professional-specialties', async (req, res) => {
   try {
     const { rows } = await pool.query(
