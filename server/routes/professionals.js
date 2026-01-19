@@ -1,17 +1,35 @@
 const express = require('express');
-const { v4: uuidv4 } = require('uuid');
 const bcrypt = require('bcryptjs');
 const pool = require('../config/database');
 const { authMiddleware, adminMiddleware } = require('../middleware/auth');
 
 const router = express.Router();
 
-// GET /api/professionals - Get all active professionals
+// GET /api/professionals - Get all professionals (supports ?active=true filter)
 router.get('/', async (req, res) => {
   try {
-    const { rows } = await pool.query(
-      'SELECT id, name, email, phone, active FROM professionals WHERE active = true ORDER BY name'
-    );
+    const { active } = req.query;
+    
+    let query = `
+      SELECT p.id, p.name, p.email, p.phone, p.active, p.user_id, p.created_at,
+             COALESCE(
+               json_agg(
+                 json_build_object('id', ps.specialty_id, 'name', s.name)
+               ) FILTER (WHERE ps.id IS NOT NULL), 
+               '[]'
+             ) as specialties
+      FROM professionals p
+      LEFT JOIN professional_specialties ps ON p.id = ps.professional_id
+      LEFT JOIN specialties s ON ps.specialty_id = s.id
+    `;
+    
+    if (active === 'true') {
+      query += ' WHERE p.active = true';
+    }
+    
+    query += ' GROUP BY p.id ORDER BY p.name';
+
+    const { rows } = await pool.query(query);
     res.json(rows);
   } catch (error) {
     console.error('Get professionals error:', error);
@@ -23,11 +41,107 @@ router.get('/', async (req, res) => {
 router.get('/all', authMiddleware, adminMiddleware, async (req, res) => {
   try {
     const { rows } = await pool.query(
-      'SELECT id, name, email, phone, active, user_id, created_at FROM professionals ORDER BY name'
+      `SELECT p.id, p.name, p.email, p.phone, p.active, p.user_id, p.created_at,
+              COALESCE(
+                json_agg(
+                  json_build_object('id', ps.specialty_id, 'name', s.name)
+                ) FILTER (WHERE ps.id IS NOT NULL), 
+                '[]'
+              ) as specialties
+       FROM professionals p
+       LEFT JOIN professional_specialties ps ON p.id = ps.professional_id
+       LEFT JOIN specialties s ON ps.specialty_id = s.id
+       GROUP BY p.id
+       ORDER BY p.name`
     );
     res.json(rows);
   } catch (error) {
     console.error('Get all professionals error:', error);
+    res.status(500).json({ error: 'Erro ao buscar profissionais' });
+  }
+});
+
+// GET /api/professionals/:id - Get professional by ID
+router.get('/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+    
+    const { rows } = await pool.query(
+      `SELECT p.id, p.name, p.email, p.phone, p.active, p.user_id, p.created_at,
+              COALESCE(
+                json_agg(
+                  json_build_object('id', ps.specialty_id, 'name', s.name)
+                ) FILTER (WHERE ps.id IS NOT NULL), 
+                '[]'
+              ) as specialties
+       FROM professionals p
+       LEFT JOIN professional_specialties ps ON p.id = ps.professional_id
+       LEFT JOIN specialties s ON ps.specialty_id = s.id
+       WHERE p.id = $1
+       GROUP BY p.id`,
+      [id]
+    );
+
+    if (rows.length === 0) {
+      return res.status(404).json({ error: 'Profissional não encontrado' });
+    }
+
+    res.json(rows[0]);
+  } catch (error) {
+    console.error('Get professional error:', error);
+    res.status(500).json({ error: 'Erro ao buscar profissional' });
+  }
+});
+
+// GET /api/professionals/user/:userId - Get professional by user ID
+router.get('/user/:userId', async (req, res) => {
+  try {
+    const { userId } = req.params;
+    
+    const { rows } = await pool.query(
+      `SELECT p.id, p.name, p.email, p.phone, p.active, p.user_id, p.created_at,
+              COALESCE(
+                json_agg(
+                  json_build_object('id', ps.specialty_id, 'name', s.name)
+                ) FILTER (WHERE ps.id IS NOT NULL), 
+                '[]'
+              ) as specialties
+       FROM professionals p
+       LEFT JOIN professional_specialties ps ON p.id = ps.professional_id
+       LEFT JOIN specialties s ON ps.specialty_id = s.id
+       WHERE p.user_id = $1
+       GROUP BY p.id`,
+      [userId]
+    );
+
+    if (rows.length === 0) {
+      return res.status(404).json({ error: 'Profissional não encontrado' });
+    }
+
+    res.json(rows[0]);
+  } catch (error) {
+    console.error('Get professional by user error:', error);
+    res.status(500).json({ error: 'Erro ao buscar profissional' });
+  }
+});
+
+// GET /api/professionals/by-specialty/:specialtyId - Get professionals by specialty
+router.get('/by-specialty/:specialtyId', async (req, res) => {
+  try {
+    const { specialtyId } = req.params;
+    
+    const { rows } = await pool.query(
+      `SELECT p.id, p.name, p.email, p.phone, p.active
+       FROM professionals p
+       INNER JOIN professional_specialties ps ON p.id = ps.professional_id
+       WHERE ps.specialty_id = $1 AND p.active = true
+       ORDER BY p.name`,
+      [specialtyId]
+    );
+
+    res.json(rows);
+  } catch (error) {
+    console.error('Get professionals by specialty error:', error);
     res.status(500).json({ error: 'Erro ao buscar profissionais' });
   }
 });
@@ -37,33 +151,27 @@ router.post('/', authMiddleware, adminMiddleware, async (req, res) => {
   try {
     const { name, email, phone, specialties } = req.body;
 
-    if (!name || !email) {
-      return res.status(400).json({ error: 'Nome e email são obrigatórios' });
+    if (!name) {
+      return res.status(400).json({ error: 'Nome é obrigatório' });
     }
 
-    const professionalId = uuidv4();
-
-    await pool.query(
-      'INSERT INTO professionals (id, name, email, phone, active, created_at) VALUES ($1, $2, $3, $4, true, NOW())',
-      [professionalId, name, email, phone || null]
+    // Insert professional (SERIAL id auto-generated)
+    const { rows: [newProfessional] } = await pool.query(
+      'INSERT INTO professionals (name, email, phone, active, created_at) VALUES ($1, $2, $3, true, NOW()) RETURNING *',
+      [name, email || null, phone || null]
     );
 
     // Add specialties if provided
     if (specialties && specialties.length > 0) {
       for (const specialtyId of specialties) {
         await pool.query(
-          'INSERT INTO professional_specialties (id, professional_id, specialty_id) VALUES ($1, $2, $3)',
-          [uuidv4(), professionalId, specialtyId]
+          'INSERT INTO professional_specialties (professional_id, specialty_id) VALUES ($1, $2)',
+          [newProfessional.id, specialtyId]
         );
       }
     }
 
-    const { rows: [professional] } = await pool.query(
-      'SELECT * FROM professionals WHERE id = $1',
-      [professionalId]
-    );
-
-    res.status(201).json(professional);
+    res.status(201).json(newProfessional);
   } catch (error) {
     console.error('Create professional error:', error);
     res.status(500).json({ error: 'Erro ao criar profissional' });
@@ -82,13 +190,15 @@ router.put('/:id', authMiddleware, adminMiddleware, async (req, res) => {
     );
 
     // Update specialties if provided
-    if (specialties) {
+    if (specialties !== undefined) {
       await pool.query('DELETE FROM professional_specialties WHERE professional_id = $1', [id]);
-      for (const specialtyId of specialties) {
-        await pool.query(
-          'INSERT INTO professional_specialties (id, professional_id, specialty_id) VALUES ($1, $2, $3)',
-          [uuidv4(), id, specialtyId]
-        );
+      if (specialties && specialties.length > 0) {
+        for (const specialtyId of specialties) {
+          await pool.query(
+            'INSERT INTO professional_specialties (professional_id, specialty_id) VALUES ($1, $2)',
+            [id, specialtyId]
+          );
+        }
       }
     }
 
@@ -101,6 +211,21 @@ router.put('/:id', authMiddleware, adminMiddleware, async (req, res) => {
   } catch (error) {
     console.error('Update professional error:', error);
     res.status(500).json({ error: 'Erro ao atualizar profissional' });
+  }
+});
+
+// DELETE /api/professionals/:id - Delete professional (admin)
+router.delete('/:id', authMiddleware, adminMiddleware, async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    // Soft delete - just deactivate
+    await pool.query('UPDATE professionals SET active = false WHERE id = $1', [id]);
+
+    res.json({ message: 'Profissional removido com sucesso' });
+  } catch (error) {
+    console.error('Delete professional error:', error);
+    res.status(500).json({ error: 'Erro ao remover profissional' });
   }
 });
 
@@ -126,31 +251,34 @@ router.post('/:id/create-account', async (req, res) => {
       return res.status(400).json({ error: 'Profissional já possui conta' });
     }
 
-    const hashedPassword = await bcrypt.hash(password, 10);
-    const userId = uuidv4();
+    if (!professional.email) {
+      return res.status(400).json({ error: 'Profissional não possui email cadastrado' });
+    }
 
-    // Create user
-    await pool.query(
-      'INSERT INTO users (id, email, password_hash, created_at, updated_at) VALUES ($1, $2, $3, NOW(), NOW())',
-      [userId, professional.email.toLowerCase(), hashedPassword]
+    const hashedPassword = await bcrypt.hash(password, 10);
+
+    // Create user (SERIAL id auto-generated)
+    const { rows: [newUser] } = await pool.query(
+      'INSERT INTO users (email, password_hash, created_at, updated_at) VALUES ($1, $2, NOW(), NOW()) RETURNING id, email',
+      [professional.email.toLowerCase(), hashedPassword]
     );
 
     // Create profile
     await pool.query(
-      'INSERT INTO profiles (id, user_id, name, email, must_change_password, created_at, updated_at) VALUES ($1, $2, $3, $4, true, NOW(), NOW())',
-      [uuidv4(), userId, professional.name, professional.email.toLowerCase()]
+      'INSERT INTO profiles (user_id, name, email, must_change_password, created_at, updated_at) VALUES ($1, $2, $3, true, NOW(), NOW())',
+      [newUser.id, professional.name, professional.email.toLowerCase()]
     );
 
     // Create role
     await pool.query(
-      'INSERT INTO user_roles (id, user_id, role) VALUES ($1, $2, $3)',
-      [uuidv4(), userId, 'professional']
+      'INSERT INTO user_roles (user_id, role) VALUES ($1, $2)',
+      [newUser.id, 'professional']
     );
 
     // Link to professional
     await pool.query(
       'UPDATE professionals SET user_id = $1 WHERE id = $2',
-      [userId, id]
+      [newUser.id, id]
     );
 
     res.status(201).json({ message: 'Conta criada com sucesso' });

@@ -12,6 +12,7 @@ const specialtiesRoutes = require('./routes/specialties');
 const availabilityRoutes = require('./routes/availability');
 const profilesRoutes = require('./routes/profiles');
 const settingsRoutes = require('./routes/settings');
+const specialtyBlocksRoutes = require('./routes/specialty-blocks');
 
 const app = express();
 const PORT = process.env.PORT || 3001;
@@ -36,6 +37,7 @@ app.use('/api/specialties', specialtiesRoutes);
 app.use('/api/availability', availabilityRoutes);
 app.use('/api/profiles', profilesRoutes);
 app.use('/api/settings', settingsRoutes);
+app.use('/api/specialty-blocks', specialtyBlocksRoutes);
 
 // Health check
 app.get('/api/health', (req, res) => {

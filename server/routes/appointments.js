@@ -1,14 +1,13 @@
 const express = require('express');
-const { v4: uuidv4 } = require('uuid');
 const pool = require('../config/database');
 const { authMiddleware, adminMiddleware } = require('../middleware/auth');
 
 const router = express.Router();
 
-// GET /api/appointments - Get user appointments
+// GET /api/appointments - Get appointments
 router.get('/', authMiddleware, async (req, res) => {
   try {
-    const { status, professional_id, start_date, end_date } = req.query;
+    const { status, professional_id, start_date, end_date, date } = req.query;
     
     let query = `
       SELECT a.*, 
@@ -39,6 +38,11 @@ router.get('/', authMiddleware, async (req, res) => {
       query += ` AND a.professional_id = $${params.length}`;
     }
 
+    if (date) {
+      params.push(date);
+      query += ` AND a.appointment_date = $${params.length}`;
+    }
+
     if (start_date) {
       params.push(start_date);
       query += ` AND a.appointment_date >= $${params.length}`;
@@ -59,7 +63,60 @@ router.get('/', authMiddleware, async (req, res) => {
   }
 });
 
-// GET /api/appointments/professional - Get professional's appointments
+// GET /api/appointments/user/:userId - Get appointments by user
+router.get('/user/:userId', authMiddleware, async (req, res) => {
+  try {
+    const { userId } = req.params;
+
+    // Check permission
+    if (req.userId != userId && req.userRole !== 'admin' && req.userRole !== 'developer') {
+      return res.status(403).json({ error: 'Sem permissão para acessar estes agendamentos' });
+    }
+
+    const { rows } = await pool.query(
+      `SELECT a.*, 
+              p.name as professional_name, p.email as professional_email,
+              s.name as specialty_name, s.duration_minutes
+       FROM appointments a
+       LEFT JOIN professionals p ON a.professional_id = p.id
+       LEFT JOIN specialties s ON a.specialty_id = s.id
+       WHERE a.user_id = $1
+       ORDER BY a.appointment_date DESC, a.appointment_time DESC`,
+      [userId]
+    );
+
+    res.json(rows);
+  } catch (error) {
+    console.error('Get user appointments error:', error);
+    res.status(500).json({ error: 'Erro ao buscar agendamentos' });
+  }
+});
+
+// GET /api/appointments/professional/:professionalId - Get appointments by professional
+router.get('/professional/:professionalId', authMiddleware, async (req, res) => {
+  try {
+    const { professionalId } = req.params;
+
+    const { rows } = await pool.query(
+      `SELECT a.*, 
+              s.name as specialty_name, s.duration_minutes,
+              pr.name as user_name, pr.email as user_email, pr.phone as user_phone
+       FROM appointments a
+       LEFT JOIN specialties s ON a.specialty_id = s.id
+       LEFT JOIN profiles pr ON a.user_id = pr.user_id
+       WHERE a.professional_id = $1
+       ORDER BY a.appointment_date DESC, a.appointment_time DESC`,
+      [professionalId]
+    );
+
+    res.json(rows);
+  } catch (error) {
+    console.error('Get professional appointments error:', error);
+    res.status(500).json({ error: 'Erro ao buscar agendamentos' });
+  }
+});
+
+// GET /api/appointments/professional - Get professional's own appointments
 router.get('/professional', authMiddleware, async (req, res) => {
   try {
     // Get professional_id for this user
@@ -93,10 +150,35 @@ router.get('/professional', authMiddleware, async (req, res) => {
   }
 });
 
+// GET /api/appointments/check-existing - Check existing appointments
+router.get('/check-existing', authMiddleware, async (req, res) => {
+  try {
+    const { user_id, specialty_id, start_date, end_date } = req.query;
+
+    const { rows } = await pool.query(
+      `SELECT a.*, s.name as specialty_name
+       FROM appointments a
+       LEFT JOIN specialties s ON a.specialty_id = s.id
+       WHERE a.user_id = $1 AND a.specialty_id = $2 
+       AND a.appointment_date >= $3 AND a.appointment_date <= $4
+       AND a.status IN ('scheduled', 'completed')`,
+      [user_id, specialty_id, start_date, end_date]
+    );
+
+    res.json(rows);
+  } catch (error) {
+    console.error('Check existing appointments error:', error);
+    res.status(500).json({ error: 'Erro ao verificar agendamentos' });
+  }
+});
+
 // POST /api/appointments - Create appointment
 router.post('/', authMiddleware, async (req, res) => {
   try {
-    const { professional_id, specialty_id, appointment_date, appointment_time, notes } = req.body;
+    const { user_id, professional_id, specialty_id, appointment_date, appointment_time, notes } = req.body;
+
+    // Use the provided user_id or default to the authenticated user
+    const appointmentUserId = user_id || req.userId;
 
     if (!professional_id || !specialty_id || !appointment_date || !appointment_time) {
       return res.status(400).json({ error: 'Dados incompletos para o agendamento' });
@@ -114,15 +196,14 @@ router.post('/', authMiddleware, async (req, res) => {
       return res.status(400).json({ error: 'Este horário já está ocupado' });
     }
 
-    const appointmentId = uuidv4();
-
-    await pool.query(
-      `INSERT INTO appointments (id, user_id, professional_id, specialty_id, appointment_date, appointment_time, notes, status, created_at, updated_at)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, 'scheduled', NOW(), NOW())`,
-      [appointmentId, req.userId, professional_id, specialty_id, appointment_date, appointment_time, notes || null]
+    const { rows: [newAppointment] } = await pool.query(
+      `INSERT INTO appointments (user_id, professional_id, specialty_id, appointment_date, appointment_time, notes, status, created_at, updated_at)
+       VALUES ($1, $2, $3, $4, $5, $6, 'scheduled', NOW(), NOW()) RETURNING *`,
+      [appointmentUserId, professional_id, specialty_id, appointment_date, appointment_time, notes || null]
     );
 
-    const { rows: [newAppointment] } = await pool.query(
+    // Get full appointment data
+    const { rows: [fullAppointment] } = await pool.query(
       `SELECT a.*, 
               p.name as professional_name,
               s.name as specialty_name
@@ -130,10 +211,10 @@ router.post('/', authMiddleware, async (req, res) => {
        LEFT JOIN professionals p ON a.professional_id = p.id
        LEFT JOIN specialties s ON a.specialty_id = s.id
        WHERE a.id = $1`,
-      [appointmentId]
+      [newAppointment.id]
     );
 
-    res.status(201).json(newAppointment);
+    res.status(201).json(fullAppointment);
   } catch (error) {
     console.error('Create appointment error:', error);
     res.status(500).json({ error: 'Erro ao criar agendamento' });
@@ -178,7 +259,30 @@ router.put('/:id', authMiddleware, async (req, res) => {
   }
 });
 
-// DELETE /api/appointments/:id - Cancel appointment
+// POST /api/appointments/:id/cancel - Cancel appointment
+router.post('/:id/cancel', authMiddleware, async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    const { rows } = await pool.query(
+      `UPDATE appointments SET status = 'cancelled', updated_at = NOW() 
+       WHERE id = $1 AND (user_id = $2 OR $3 IN ('admin', 'developer'))
+       RETURNING *`,
+      [id, req.userId, req.userRole]
+    );
+
+    if (rows.length === 0) {
+      return res.status(404).json({ error: 'Agendamento não encontrado ou sem permissão' });
+    }
+
+    res.json({ message: 'Agendamento cancelado com sucesso' });
+  } catch (error) {
+    console.error('Cancel appointment error:', error);
+    res.status(500).json({ error: 'Erro ao cancelar agendamento' });
+  }
+});
+
+// DELETE /api/appointments/:id - Cancel appointment (alias)
 router.delete('/:id', authMiddleware, async (req, res) => {
   try {
     const { id } = req.params;
@@ -217,7 +321,8 @@ router.get('/booked-slots', async (req, res) => {
       [professional_id, date]
     );
 
-    res.json(rows.map(r => r.appointment_time));
+    const bookedSlots = rows.map(r => r.appointment_time.substring(0, 5));
+    res.json({ bookedSlots });
   } catch (error) {
     console.error('Get booked slots error:', error);
     res.status(500).json({ error: 'Erro ao buscar horários ocupados' });
