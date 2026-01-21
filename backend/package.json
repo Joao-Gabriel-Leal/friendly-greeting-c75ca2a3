@@ -1,0 +1,13 @@
+{
+  "name": "agendamento-backend",
+  "version": "1.0.0",
+  "description": "Backend do Sistema de Agendamentos",
+  "scripts": {
+    "start": "python server.py",
+    "dev": "python server.py",
+    "init": "python init_db.py",
+    "test": "curl http://localhost:8001/api/health"
+  },
+  "keywords": ["fastapi", "python", "backend"],
+  "author": "Anadem"
+}
