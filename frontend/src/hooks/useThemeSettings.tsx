@@ -1,5 +1,4 @@
 import { useState, useEffect, createContext, useContext, ReactNode, useCallback } from 'react';
-import { supabase } from '@/integrations/supabase/client';
 
 interface ThemeSettingsContextType {
   themeToggleVisible: boolean;
