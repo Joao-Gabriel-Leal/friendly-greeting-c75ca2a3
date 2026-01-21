@@ -2,6 +2,66 @@
 
 Sistema completo de agendamentos com autenticação, gestão de profissionais, especialidades e agendamentos.
 
+---
+
+## 🚀 COMEÇAR AGORA
+
+### 📖 Guias Disponíveis:
+
+1. **[⚡ COMEÇAR RÁPIDO](COMECAR_RAPIDO.md)** ← **COMECE AQUI!**
+   - 5 passos simples
+   - Mais rápido para iniciar
+
+2. **[📥 Como Baixar o Projeto](COMO_BAIXAR.md)**
+   - Git Clone ou Download ZIP
+   - Verificação de instalação
+
+3. **[📚 Guia Completo de Instalação](GUIA_INSTALACAO_COMPLETO.md)**
+   - Passo a passo detalhado
+   - Troubleshooting completo
+
+4. **[💻 Comandos Rápidos](COMANDOS_RAPIDOS.md)**
+   - Referência rápida de comandos
+   - Diferentes formas de rodar
+
+5. **[❓ Por que não é mais npm start?](POR_QUE_NAO_NPM_START.md)**
+   - Explicação sobre Python vs Node
+   - Comparações e vantagens
+
+---
+
+## 🗄️ Banco de Dados
+
+- **[database_completo.sql](database_completo.sql)** - SQL completo com dados de teste
+- **[verificar_banco.sql](verificar_banco.sql)** - Script de verificação
+
+---
+
+## 🎯 Para Impacie ntes (TL;DR)
+
+```bash
+# 1. Baixar
+git clone <repo> && cd <pasta>
+
+# 2. Banco
+psql -U postgres -d qvtagendamento -f database_completo.sql
+
+# 3. Configurar backend/.env (senha do PostgreSQL)
+
+# 4. Instalar
+cd backend && pip install -r requirements.txt
+cd ../frontend && npm install
+
+# 5. Rodar
+cd .. && start-all.bat  # Windows
+cd .. && ./start-all.sh # Linux/Mac
+
+# 6. Acessar http://localhost:3000
+# Login: admin@anadem.com / admin123
+```
+
+---
+
 ## 🏗️ Arquitetura
 
 - **Frontend**: React + Vite + TypeScript + Tailwind CSS + shadcn/ui
